@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SVG → img style PNG</title>
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+  <link href="https://api.fontshare.com/v2/css?f[]=ranade@300&f[]=archivo@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <h1>SVG → img style PNG</h1>
+      <button type="button" class="gif-toggle interactable" data-type="download" id="gifToggle"
+        onclick="toggleAnimation()">
+        <svg class="gif-toggle__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <polyline points="23 4 23 10 17 10" />
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+        </svg>
+        <span class="gif-toggle__label">GIF</span>
+      </button>
+    </header>
+
+    <div class="main-stack">
+      <section class="col-input" aria-label="Input">
+        <p class="section-label">Input</p>
+        <div class="upload-area interactable" data-type="upload" id="dropZone">
+          <p>Drop SVG or click — replaces default Kurdistan flag.</p>
+          <input type="file" id="fileInput" accept=".svg">
+          <div class="error-msg" id="errorMsg"></div>
+        </div>
+        <p class="footnote">Rasterized rounded rect, wave warp on Apple/Samsung, tuned highlights. Download per vendor
+          below.</p>
+      </section>
+
+      <section class="block-output" aria-label="Output">
+        <p class="empty-output" id="outputPlaceholder">Previews appear here after load.</p>
+        <div class="previews" id="previewsContainer" style="display: none;">
+          <div class="preview-card" id="card-apple">
+            <div class="preview-header interactable" data-type="download" onclick="downloadPng('apple')">
+              <h3>Apple</h3>
+              <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </div>
+            <canvas class="preview-canvas interactable" data-type="download" id="preview-apple" width="256" height="256"
+              onclick="downloadPng('apple')"></canvas>
+          </div>
+          <div class="preview-card" id="card-twitter">
+            <div class="preview-header interactable" data-type="download" onclick="downloadPng('twitter')">
+              <h3>Twitter</h3>
+              <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </div>
+            <canvas class="preview-canvas interactable" data-type="download" id="preview-twitter" width="256"
+              height="256" onclick="downloadPng('twitter')"></canvas>
+          </div>
+          <div class="preview-card" id="card-samsung">
+            <div class="preview-header interactable" data-type="download" onclick="downloadPng('samsung')">
+              <h3>Samsung</h3>
+              <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </div>
+            <canvas class="preview-canvas interactable" data-type="download" id="preview-samsung" width="256"
+              height="256" onclick="downloadPng('samsung')"></canvas>
+          </div>
+          <div class="preview-card" id="card-google">
+            <div class="preview-header interactable" data-type="download" onclick="downloadPng('google')">
+              <h3>Google</h3>
+              <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </div>
+            <canvas class="preview-canvas interactable" data-type="download" id="preview-google" width="256"
+              height="256" onclick="downloadPng('google')"></canvas>
+          </div>
+          <div class="preview-card" id="card-huawei">
+            <div class="preview-header interactable" data-type="download" onclick="downloadPng('huawei')">
+              <h3>Huawei</h3>
+              <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </div>
+            <canvas class="preview-canvas interactable" data-type="download" id="preview-huawei" width="256"
+              height="256" onclick="downloadPng('huawei')"></canvas>
+          </div>
+          <div class="preview-card" id="card-whatsapp">
+            <div class="preview-header interactable" data-type="download" onclick="downloadPng('whatsapp')">
+              <h3>WhatsApp</h3>
+              <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </div>
+            <canvas class="preview-canvas interactable" data-type="download" id="preview-whatsapp" width="256"
+              height="256" onclick="downloadPng('whatsapp')"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="tuning-block" id="tuningPanel" style="display: none;" aria-label="Parameters">
+        <div class="param-groups" id="sliders"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="flowers-bottom" role="presentation" aria-hidden="true">
+    <img src="flowers.webp" alt="" decoding="async" fetchpriority="low">
+  </div>
+
+  <div id="trailer">
+    <div id="trailer-icon"></div>
+  </div>
+
+
+  <script src="https://unpkg.com/lenis@1.2.3/dist/lenis.min.js"></script>
+  <script src="main.js" type="module"></script>
+</body>
+</html>

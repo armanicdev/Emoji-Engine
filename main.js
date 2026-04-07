@@ -1,0 +1,820 @@
+// Initialize Lenis for smooth scrolling
+const lenis = new Lenis({
+  duration: 0.8,
+  easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+  orientation: "vertical",
+  gestureOrientation: "vertical",
+  smoothWheel: true
+});
+
+function raf(time) {
+  lenis.raf(time);
+  requestAnimationFrame(raf);
+}
+
+requestAnimationFrame(raf);
+
+let currentImg = null;
+let isAnimated = false;
+let animationPhaseOffset = 0;
+let lastAnimTime = 0;
+const ANIM_SPEED = 1.5; // radians per second
+
+function toggleAnimation() {
+  isAnimated = !isAnimated;
+  const btn = document.getElementById('gifToggle');
+  const label = btn.querySelector('.gif-toggle__label');
+
+  // Trigger spin animation once
+  btn.classList.remove('gif-toggle--spin-once');
+  void btn.offsetWidth; // force reflow
+  btn.classList.add('gif-toggle--spin-once');
+
+  if (isAnimated) {
+    label.textContent = 'STATIC';
+    lastAnimTime = performance.now();
+    requestAnimationFrame(animateLoop);
+  } else {
+    label.textContent = 'GIF';
+    animationPhaseOffset = 0;
+    if (currentImg) generateVariants();
+  }
+}
+window.toggleAnimation = toggleAnimation;
+
+function animateLoop(now) {
+  if (!isAnimated) return;
+  const dt = (now - lastAnimTime) / 1000;
+  lastAnimTime = now;
+  animationPhaseOffset += ANIM_SPEED * dt;
+  if (currentImg) generateVariants();
+  requestAnimationFrame(animateLoop);
+}
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const errorMsg = document.getElementById('errorMsg');
+const previewsContainer = document.getElementById('previewsContainer');
+const tuningPanel = document.getElementById('tuningPanel');
+const outputPlaceholder = document.getElementById('outputPlaceholder');
+const previewDownloadButtons = document.querySelectorAll('.preview-header, .preview-canvas');
+const hapticsState = {
+  instance: null,
+  ready: false,
+  enabled: false,
+  lastSliderTickAt: 0,
+  sliderValues: new Map()
+};
+
+const HAPTIC_PRESETS = {
+  uploadPick: [{ duration: 16, intensity: 0.18 }],
+  sliderTick: [{ duration: 10, intensity: 0.12 }],
+  sliderSettle: [{ duration: 18, intensity: 0.22 }],
+  download: [{ duration: 18, intensity: 0.28 }, { delay: 26, duration: 34, intensity: 0.44 }]
+};
+
+function deviceHapticsSupported() {
+  return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+}
+
+function patternToVibrateInput(input) {
+  if (typeof input === 'number') return input;
+  if (Array.isArray(input)) {
+    if (typeof input[0] === 'number') return input;
+    const pattern = [];
+    input.forEach((step, index) => {
+      if (step && typeof step.delay === 'number' && step.delay > 0) {
+        pattern.push(step.delay);
+      } else if (index > 0) {
+        pattern.push(24);
+      }
+      pattern.push(Math.max(8, Math.round(step.duration ?? 16)));
+    });
+    return pattern;
+  }
+  switch (input) {
+    case 'success':
+      return [40, 40, 40];
+    case 'nudge':
+      return [50, 60, 28];
+    case 'error':
+      return [40, 36, 40, 36, 40];
+    default:
+      return [16];
+  }
+}
+
+function triggerHaptic(input, options) {
+  if (!hapticsState.enabled) return;
+
+  if (hapticsState.instance) {
+    hapticsState.instance.trigger(input, options).catch(() => { });
+    return;
+  }
+
+  const fallback = patternToVibrateInput(input);
+  if (fallback && deviceHapticsSupported()) {
+    navigator.vibrate(fallback);
+  }
+}
+
+async function initHaptics() {
+  try {
+    const { WebHaptics } = await import('https://esm.sh/web-haptics');
+    hapticsState.instance = new WebHaptics({
+      debug: false,
+      showSwitch: false
+    });
+    hapticsState.enabled = Boolean(WebHaptics.isSupported || deviceHapticsSupported());
+  } catch (error) {
+    hapticsState.enabled = deviceHapticsSupported();
+  } finally {
+    hapticsState.ready = true;
+  }
+}
+
+function maybeTriggerSliderTick(id, value) {
+  const previousValue = hapticsState.sliderValues.get(id);
+  const now = performance.now();
+  hapticsState.sliderValues.set(id, value);
+
+  if (previousValue === value) return;
+  if (now - hapticsState.lastSliderTickAt < 70) return;
+
+  hapticsState.lastSliderTickAt = now;
+  triggerHaptic(HAPTIC_PRESETS.sliderTick, { intensity: 0.12 });
+}
+
+// Presets configuration for Canvas pixel warp
+const STYLE_PRESETS = {
+  apple: {
+    waveAmplitude: 12,
+    waveFrequency: 1, // 1 full wave
+    wavePhase: 0,
+    lightIntensity: 45, // Increased for stronger contrast
+    cornerRadius: 16,
+    strokeWidth: 2,
+    innerStrokeOpacity: 0.15,
+    shadowBlur: 8,
+    shadowY: 4,
+    shadowOpacity: 0.2
+  },
+  twitter: {
+    cornerRadius: 32,
+    strokeWidth: 4,
+    strokeOpacity: 0.15,
+    shadowBlur: 4,
+    shadowY: 2,
+    shadowOpacity: 0.1,
+    glossOpacity: 0.15
+  },
+  google: {
+    waveAmplitude: 15,
+    waveFrequency: 1, // Full wave
+    wavePhase: 3.14, // Starts by going up to a peak
+    lightIntensity: 10,
+    cornerRadius: 4,
+    strokeWidth: 2,
+    strokeOpacity: 0.2,
+    innerStrokeOpacity: 0,
+    shadowBlur: 0,
+    shadowY: 0,
+    shadowOpacity: 0,
+    glossOpacity: 0
+  },
+  huawei: {
+    waveAmplitude: 0,
+    waveFrequency: 2.0,
+    wavePhase: -1.57,
+    lightIntensity: 60,
+    cornerRadius: 2,
+    strokeWidth: 2,
+    strokeOpacity: 0.2,
+    innerStrokeOpacity: 0,
+    shadowBlur: 0,
+    shadowY: 0,
+    shadowOpacity: 0,
+    glossOpacity: 0
+  },
+  whatsapp: {
+    waveAmplitude: 10,
+    waveFrequency: 1,
+    wavePhase: 3.06,
+    lightIntensity: 60,
+    cornerRadius: 10,
+    strokeWidth: 4,
+    strokeOpacity: 0.4,
+    innerStrokeOpacity: 0.21,
+    shadowBlur: 4,
+    shadowY: 4,
+    shadowOpacity: 0.18,
+    glossOpacity: 5.03
+  },
+  samsung: {
+    waveAmplitude: 14,
+    waveFrequency: 1, // Full wave
+    wavePhase: 0,
+    lightIntensity: 25, // Reduced for a softer highlight
+    cornerRadius: 12,
+    strokeWidth: 4,
+    innerStrokeOpacity: 0.25,
+    shadowBlur: 10,
+    shadowY: 6,
+    shadowOpacity: 0.3,
+    glossOpacity: 0.3 // Softer top highlight
+  }
+};
+
+const PARAM_VARIANT_ORDER = ['apple', 'twitter', 'samsung', 'google', 'huawei', 'whatsapp'];
+const PARAM_VARIANT_LABEL = {
+  apple: 'Apple',
+  twitter: 'Twitter',
+  samsung: 'Samsung',
+  google: 'Google',
+  huawei: 'Huawei',
+  whatsapp: 'WhatsApp'
+};
+
+initHaptics();
+
+dropZone.addEventListener('pointerdown', () => {
+  triggerHaptic(HAPTIC_PRESETS.uploadPick, { intensity: 0.18 });
+});
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  triggerHaptic(HAPTIC_PRESETS.uploadPick, { intensity: 0.18 });
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+previewDownloadButtons.forEach((button) => {
+  button.addEventListener('pointerdown', () => {
+    triggerHaptic(HAPTIC_PRESETS.download, { intensity: 0.38 });
+  });
+});
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.style.display = 'block';
+  previewsContainer.style.display = 'none';
+  if (outputPlaceholder) outputPlaceholder.style.display = 'block';
+  tuningPanel.style.display = 'none';
+  triggerHaptic('error', { intensity: 0.5 });
+}
+
+function setSeekPercent(seekEl, value, min, max) {
+  const pct = max === min ? 0 : ((Number(value) - min) / (max - min)) * 100;
+  seekEl.style.setProperty('--value', String(Math.min(100, Math.max(0, pct))));
+}
+
+// Initialize UI
+initSliders();
+
+// Load default SVG
+const defaultSvg = `<svg width="200" height="132" viewBox="0 0 200 132" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M200 0H0V44H83.9675L81.4104 38.7341L86.2646 44H91.7419L90.2731 34.4661L94.8262 44H98.3786L100 33L101.621 44H105.174L109.727 34.4661L108.258 44H113.735L118.59 38.7341L116.032 44H200V0Z" fill="#ED2024"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M83.9675 44H0V88H79.0584L87.0998 76.2876L71.4212 82.5L84.6406 72.0281L67.8274 73.3432L83.5461 67.233L67.0923 63.5339L83.9137 62.3284L69.2812 53.9437L85.7106 57.75L74.1996 45.4248L88.7771 53.9046L83.9675 44ZM80.2831 88H88.0944L90.7052 79.6329L80.2831 88ZM90.9166 88H95.1162L95.1365 81.767L90.9166 88ZM98.3231 88H101.677L100 82.5L98.3231 88ZM104.884 88H109.083L104.863 81.767L104.884 88ZM111.906 88H119.717L109.295 79.6329L111.906 88ZM120.942 88H200V44H116.032L111.223 53.9046L125.8 45.4248L114.289 57.75L130.719 53.9437L116.086 62.3284L132.908 63.5339L116.454 67.233L132.173 73.3432L115.359 72.0281L128.579 82.5L112.9 76.2876L120.942 88ZM113.735 44H108.258L107.159 51.134L113.735 44ZM105.174 44H101.621L102.459 49.6843L105.174 44ZM98.3786 44H94.8262L97.5408 49.6843L98.3786 44ZM91.7419 44H86.2646L92.8409 51.134L91.7419 44Z" fill="white"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M77.5543 90.1907L79.0584 88H0V132H200V88H120.942L122.446 90.1907L119.717 88H111.906L114.318 95.732L109.083 88H104.884L104.918 98.6314L101.677 88H98.3231L95.0816 98.6314L95.1162 88H90.9166L85.6818 95.732L88.0944 88H80.2831L77.5543 90.1907Z" fill="#278E43"/>
+<path d="M113.735 44L107.159 51.134L108.258 44L109.727 34.4661L105.174 44L102.459 49.6843L101.621 44L100 33L98.3786 44L97.5408 49.6843L94.8262 44L90.2731 34.4661L91.7419 44L92.8409 51.134L86.2646 44L81.4104 38.7341L83.9675 44L88.7771 53.9046L74.1996 45.4248L85.7106 57.75L69.2812 53.9437L83.9137 62.3284L67.0923 63.5339L83.5461 67.233L67.8274 73.3432L84.6406 72.0281L71.4212 82.5L87.0998 76.2876L79.0584 88L77.5543 90.1907L80.2831 88L90.7052 79.6329L88.0944 88L85.6818 95.732L90.9166 88L95.1365 81.767L95.1162 88L95.0816 98.6314L98.3231 88L100 82.5L101.677 88L104.918 98.6314L104.884 88L104.863 81.767L109.083 88L114.318 95.732L111.906 88L109.295 79.6329L119.717 88L122.446 90.1907L120.942 88L112.9 76.2876L128.579 82.5L115.359 72.0281L132.173 73.3432L116.454 67.233L132.908 63.5339L116.086 62.3284L130.719 53.9437L114.289 57.75L125.8 45.4248L111.223 53.9046L116.032 44L118.59 38.7341L113.735 44Z" fill="#FEBD11"/>
+</svg>`;
+processSvg(defaultSvg);
+
+function handleFile(file) {
+  errorMsg.style.display = 'none';
+  if (file.type !== 'image/svg+xml') {
+    return showError('Please upload a valid SVG file.');
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => processSvg(e.target.result);
+  reader.readAsText(file);
+}
+
+function processSvg(svgString) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgString, 'image/svg+xml');
+  const root = doc.documentElement;
+
+  if (root.tagName.toLowerCase() !== 'svg') {
+    return showError('Invalid SVG format.');
+  }
+
+  // Sanitize: remove scripts and foreignObjects
+  const dangerous = root.querySelectorAll('script, foreignObject');
+  dangerous.forEach(el => el.remove());
+
+  // Force 3:2 aspect ratio for consistent rendering
+  root.setAttribute('width', '420');
+  root.setAttribute('height', '280');
+  if (!root.hasAttribute('preserveAspectRatio')) {
+    root.setAttribute('preserveAspectRatio', 'none');
+  }
+
+  const serializer = new XMLSerializer();
+  const str = serializer.serializeToString(root);
+  const blob = new Blob([str], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+
+  const img = new Image();
+  img.onload = () => {
+    currentImg = img;
+    generateVariants();
+    triggerHaptic('success', { intensity: 0.36 });
+    URL.revokeObjectURL(url);
+  };
+  img.onerror = () => {
+    showError('Failed to load SVG into Canvas.');
+  };
+  img.src = url;
+}
+
+function initSliders() {
+  const slidersContainer = document.getElementById('sliders');
+  slidersContainer.innerHTML = '';
+
+  PARAM_VARIANT_ORDER.forEach((variant, sectionIndex) => {
+    const preset = STYLE_PRESETS[variant];
+    const details = document.createElement('div');
+    details.className = 'param-section accordion';
+
+    const summary = document.createElement('div');
+    summary.className = 'param-section__summary accordion__title';
+    summary.textContent = `${PARAM_VARIANT_LABEL[variant]} parameters`;
+    summary.addEventListener('click', () => {
+      details.classList.toggle('accordion--visible');
+    });
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'accordion__dropdown';
+
+    const dropdownInner = document.createElement('div');
+    dropdownInner.className = 'accordion__dropdown-inner';
+
+    const body = document.createElement('div');
+    body.className = 'param-section__body';
+
+    Object.keys(preset).forEach(key => {
+      const id = `${variant}-${key}`;
+      const value = preset[key];
+
+      let min = 0;
+      let max = value * 2;
+      let step = 0.1;
+
+      if (key === 'wavePhase') {
+        min = value - Math.PI;
+        max = value + Math.PI;
+        step = 0.1;
+      } else if (key.includes('Opacity')) {
+        step = 0.01;
+        if (value === 0) {
+          min = -1;
+          max = 1;
+        }
+      } else if (['cornerRadius', 'waveAmplitude', 'lightIntensity', 'shadowBlur', 'shadowY', 'strokeWidth'].includes(key)) {
+        step = 1;
+        if (value === 0) {
+          min = -20;
+          max = 20;
+        }
+      } else {
+        if (value === 0) {
+          min = -10;
+          max = 10;
+        }
+      }
+
+      const group = document.createElement('div');
+      group.className = 'control-group';
+      group.innerHTML = `
+            <label for="${id}">${key} <span class="val" id="${id}-val">${Number(value).toFixed(2)}</span></label>
+            <div class="seek-control" id="${id}-seek">
+              <input type="range" class="interactable" data-type="slider" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}">
+              <div class="control__track" aria-hidden="true">
+                <div class="control__track-slide">
+                  <div class="control__fill"></div>
+                  <div class="control__indicator"></div>
+                  <div class="control__fill"></div>
+                </div>
+              </div>
+            </div>
+          `;
+
+      const input = group.querySelector('input');
+      const valSpan = group.querySelector('.val');
+      const seek = group.querySelector('.seek-control');
+
+      const syncSeek = () => {
+        setSeekPercent(seek, parseFloat(input.value), min, max);
+      };
+
+      input.addEventListener('input', (e) => {
+        const newVal = parseFloat(e.target.value);
+        STYLE_PRESETS[variant][key] = newVal;
+        valSpan.textContent = newVal.toFixed(2);
+        syncSeek();
+        maybeTriggerSliderTick(id, newVal);
+        generateVariants();
+      });
+      input.addEventListener('pointerdown', () => {
+        syncSeek();
+        triggerHaptic(HAPTIC_PRESETS.sliderTick, { intensity: 0.16 });
+      });
+      input.addEventListener('change', () => {
+        triggerHaptic(HAPTIC_PRESETS.sliderSettle, { intensity: 0.24 });
+      });
+      input.addEventListener('pointerup', () => {
+        triggerHaptic(HAPTIC_PRESETS.sliderSettle, { intensity: 0.24 });
+      });
+
+      syncSeek();
+      body.appendChild(group);
+    });
+
+    dropdownInner.appendChild(body);
+    dropdown.appendChild(dropdownInner);
+    details.appendChild(summary);
+    details.appendChild(dropdown);
+    slidersContainer.appendChild(details);
+  });
+}
+
+// Global caches for the animation engine
+const variantCaches = {};
+
+function clearCaches() {
+  Object.keys(variantCaches).forEach(k => delete variantCaches[k]);
+}
+
+function generateVariants() {
+  if (!currentImg) return;
+
+  PARAM_VARIANT_ORDER.forEach(variant => {
+    renderVariant(variant, currentImg);
+  });
+
+  previewsContainer.style.display = 'grid';
+  if (outputPlaceholder) outputPlaceholder.style.display = 'none';
+  tuningPanel.style.display = 'block';
+}
+
+function renderVariant(variant, img) {
+  const W = 512;
+  const H = 512;
+  const FLAG_W = 420;
+  const FLAG_H = 280;
+  const FLAG_X = (W - FLAG_W) / 2;
+  const FLAG_Y = (H - FLAG_H) / 2;
+
+  const preset = STYLE_PRESETS[variant];
+
+  // 1. Static Cache Generation (run once per image/slider change)
+  if (!variantCaches[variant]) {
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = W;
+    srcCanvas.height = H;
+    const sCtx = srcCanvas.getContext('2d', { willReadFrequently: true });
+
+    // Draw rounded rect path
+    sCtx.beginPath();
+    sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, preset.cornerRadius);
+    sCtx.closePath();
+
+    // Clip and draw image
+    sCtx.save();
+    sCtx.clip();
+    sCtx.drawImage(img, FLAG_X, FLAG_Y, FLAG_W, FLAG_H);
+    sCtx.restore();
+
+    // Pre-warp Overlays (Gloss, Bevel, Inner Stroke)
+    if (variant === 'samsung') {
+      sCtx.save();
+      sCtx.globalCompositeOperation = 'source-atop';
+      const grad = sCtx.createLinearGradient(0, FLAG_Y, 0, FLAG_Y + FLAG_H);
+      grad.addColorStop(0, `rgba(255,255,255,${preset.glossOpacity})`);
+      grad.addColorStop(0.3, `rgba(255,255,255,0)`);
+      grad.addColorStop(0.7, `rgba(0,0,0,0)`);
+      grad.addColorStop(1, `rgba(0,0,0,0.15)`);
+      sCtx.fillStyle = grad;
+      sCtx.fillRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H);
+      sCtx.restore();
+    } else if (variant === 'google') {
+      sCtx.save();
+      sCtx.globalCompositeOperation = 'source-atop';
+      const grad = sCtx.createLinearGradient(0, FLAG_Y, 0, FLAG_Y + FLAG_H);
+      grad.addColorStop(0, `rgba(255,255,255,${preset.glossOpacity})`);
+      grad.addColorStop(1, `rgba(0,0,0,${preset.glossOpacity * 0.6})`);
+      sCtx.fillStyle = grad;
+      sCtx.fillRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H);
+      sCtx.restore();
+    }
+
+    // Draw inner stroke directly on source so it warps perfectly
+    if (variant === 'samsung') {
+      sCtx.save();
+      sCtx.beginPath();
+      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, preset.cornerRadius);
+      sCtx.lineWidth = preset.strokeWidth * 2;
+      const strokeGrad = sCtx.createLinearGradient(0, FLAG_Y, 0, FLAG_Y + FLAG_H);
+      strokeGrad.addColorStop(0, `rgba(255,255,255,0.4)`);
+      strokeGrad.addColorStop(0.1, `rgba(255,255,255,0.05)`);
+      strokeGrad.addColorStop(0.9, `rgba(0,0,0,0.1)`);
+      strokeGrad.addColorStop(1, `rgba(0,0,0,0.5)`);
+      sCtx.strokeStyle = strokeGrad;
+      sCtx.clip();
+      sCtx.stroke();
+      sCtx.restore();
+    } else if (variant === 'whatsapp') {
+      sCtx.save();
+      sCtx.beginPath();
+      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, preset.cornerRadius);
+      sCtx.lineWidth = preset.strokeWidth * 2;
+      sCtx.clip();
+
+      const strokeGrad = sCtx.createLinearGradient(0, FLAG_Y, 0, FLAG_Y + FLAG_H);
+      strokeGrad.addColorStop(0, `rgba(255,255,255,0.8)`);
+      strokeGrad.addColorStop(0.05, `rgba(0,0,0,0.1)`);
+      strokeGrad.addColorStop(1, `rgba(0,0,0,${preset.innerStrokeOpacity})`);
+      sCtx.strokeStyle = strokeGrad;
+      sCtx.stroke();
+      sCtx.restore();
+    } else if (preset.innerStrokeOpacity > 0 || preset.strokeOpacity > 0) {
+      const opacity = preset.innerStrokeOpacity || preset.strokeOpacity;
+      sCtx.save();
+      sCtx.beginPath();
+      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, preset.cornerRadius);
+      sCtx.lineWidth = preset.strokeWidth * 2;
+      sCtx.strokeStyle = `rgba(0,0,0,${opacity})`;
+      sCtx.clip();
+      sCtx.stroke();
+      sCtx.restore();
+    }
+
+    const warpCanvas = document.createElement('canvas');
+    warpCanvas.width = W;
+    warpCanvas.height = H;
+    const wCtx = warpCanvas.getContext('2d', { willReadFrequently: true });
+
+    variantCaches[variant] = {
+      srcCanvas,
+      srcData: sCtx.getImageData(0, 0, W, H).data,
+      warpCanvas,
+      wCtx,
+      destImgData: wCtx.createImageData(W, H)
+    };
+  }
+
+  const cache = variantCaches[variant];
+  const { srcCanvas, srcData, warpCanvas, wCtx, destImgData } = cache;
+  const destData = destImgData.data;
+
+  // 2. Warp Canvas
+  if (variant === 'twitter') {
+    wCtx.drawImage(srcCanvas, 0, 0);
+  } else {
+    // Pre-calculate X-axis math to save 260,000+ trig calls per frame
+    const xMath = new Float32Array(W * 2); // [dy, light, dy, light, ...]
+    for (let x = 0; x < W; x++) {
+      const nx = (x - FLAG_X) / FLAG_W;
+      let dy = 0;
+      let light = 0;
+
+      if (nx >= 0 && nx <= 1) {
+        const angle = nx * Math.PI * 2 * preset.waveFrequency + preset.wavePhase + animationPhaseOffset;
+
+        if (variant === 'apple') {
+          dy = Math.sin(angle) * preset.waveAmplitude;
+          const slopeLight = -Math.cos(angle);
+          const heightLight = -Math.sin(angle);
+          const rightEdgeShadow = Math.pow(nx, 20) * 1.2;
+          light = (slopeLight * 0.7 + heightLight * 0.3 - rightEdgeShadow) * preset.lightIntensity;
+        } else if (variant === 'samsung') {
+          dy = -Math.sin(angle) * preset.waveAmplitude;
+          light = Math.sin(angle - Math.PI / 4) * preset.lightIntensity;
+        } else if (variant === 'google') {
+          dy = Math.sin(angle) * preset.waveAmplitude;
+          light = -Math.cos(angle) * preset.lightIntensity;
+        } else if (variant === 'whatsapp') {
+          dy = Math.sin(angle) * preset.waveAmplitude;
+          light = -Math.sin(angle) * preset.lightIntensity;
+        }
+      }
+      xMath[x * 2] = dy;
+      xMath[x * 2 + 1] = light;
+    }
+
+    for (let y = 0; y < H; y++) {
+      const ny = (y - FLAG_Y) / FLAG_H;
+
+      for (let x = 0; x < W; x++) {
+        const nx = (x - FLAG_X) / FLAG_W;
+        let dy = xMath[x * 2];
+        let light = xMath[x * 2 + 1];
+
+        // Huawei requires Y-axis math because the wave is tilted diagonally
+        if (variant === 'huawei' && nx >= 0 && nx <= 1) {
+          const tiltedNx = nx + (ny * 0.15);
+          const huaweiAngle = tiltedNx * Math.PI * 2 * preset.waveFrequency + preset.wavePhase + animationPhaseOffset;
+          dy = 0;
+          const smoothMultiplier = 0.375 - 0.125 * Math.sin(huaweiAngle);
+          light = Math.sin(huaweiAngle) * preset.lightIntensity * smoothMultiplier;
+        }
+
+        const srcY = y - dy;
+
+        if (srcY >= 0 && srcY < H - 1) {
+          const y1 = Math.floor(srcY);
+          const y2 = y1 + 1;
+          const fy = srcY - y1;
+
+          const idx1 = (y1 * W + x) * 4;
+          const idx2 = (y2 * W + x) * 4;
+          const destIdx = (y * W + x) * 4;
+
+          const alpha1 = srcData[idx1 + 3];
+          const alpha2 = srcData[idx2 + 3];
+          const outAlpha = alpha1 * (1 - fy) + alpha2 * fy;
+
+          if (outAlpha > 0) {
+            for (let c = 0; c < 3; c++) {
+              const val = srcData[idx1 + c] * (1 - fy) + srcData[idx2 + c] * fy;
+              destData[destIdx + c] = Math.min(255, Math.max(0, val + light));
+            }
+            destData[destIdx + 3] = outAlpha;
+          } else {
+            destData[destIdx + 3] = 0; // Clear alpha for transparent pixels
+          }
+        } else {
+          const destIdx = (y * W + x) * 4;
+          destData[destIdx + 3] = 0; // Clear alpha for out-of-bounds pixels
+        }
+      }
+    }
+    wCtx.putImageData(destImgData, 0, 0);
+  }
+
+  // 3. Final Canvas (Shadows, Downscale)
+  const finalCanvas = document.getElementById(`preview-${variant}`);
+  const fCtx = finalCanvas.getContext('2d');
+  fCtx.clearRect(0, 0, 256, 256);
+
+  // Draw shadow
+  if (preset.shadowOpacity > 0) {
+    fCtx.save();
+    fCtx.shadowColor = `rgba(0,0,0,${preset.shadowOpacity})`;
+    fCtx.shadowBlur = preset.shadowBlur;
+    fCtx.shadowOffsetY = preset.shadowY;
+    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, 256, 256);
+    fCtx.restore();
+  } else {
+    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, 256, 256);
+  }
+}
+
+let gifencModule = null;
+
+async function loadGifenc() {
+  if (!gifencModule) {
+    gifencModule = await import('https://unpkg.com/gifenc@1.0.3/dist/gifenc.esm.js');
+  }
+  return gifencModule;
+}
+
+function downloadPng(variant) {
+  if (isAnimated) {
+    downloadGif(variant);
+    return;
+  }
+  const canvas = document.getElementById(`preview-${variant}`);
+  if (!canvas) return;
+  const url = canvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `flag-${variant}-style.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+window.downloadPng = downloadPng;
+
+async function downloadGif(variant) {
+  const card = document.getElementById(`card-${variant}`);
+  const header = card.querySelector('h3');
+  const originalText = header.textContent;
+  header.textContent = 'RENDERING...';
+
+  try {
+    const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
+
+    const GIF_SIZE = 256;
+    const TOTAL_FRAMES = 30;
+    const FRAME_DELAY = Math.round(1000 / 30);
+
+    const savedOffset = animationPhaseOffset;
+    const wasAnimated = isAnimated;
+    isAnimated = false;
+
+    const gif = GIFEncoder();
+
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = GIF_SIZE;
+    tempCanvas.height = GIF_SIZE;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    for (let i = 0; i < TOTAL_FRAMES; i++) {
+      animationPhaseOffset = (i / TOTAL_FRAMES) * Math.PI * 2;
+      renderVariant(variant, currentImg);
+
+      const srcCanvas = document.getElementById(`preview-${variant}`);
+      tempCtx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
+      tempCtx.fillStyle = '#f4f1ea';
+      tempCtx.fillRect(0, 0, GIF_SIZE, GIF_SIZE);
+      tempCtx.drawImage(srcCanvas, 0, 0);
+
+      const { data } = tempCtx.getImageData(0, 0, GIF_SIZE, GIF_SIZE);
+      const palette = quantize(data, 256);
+      const index = applyPalette(data, palette);
+      gif.writeFrame(index, GIF_SIZE, GIF_SIZE, { palette, delay: FRAME_DELAY });
+
+      if (i % 5 === 0) {
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    gif.finish();
+    const output = gif.bytes();
+    const blob = new Blob([output], { type: 'image/gif' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `flag-${variant}-style.gif`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    animationPhaseOffset = savedOffset;
+    isAnimated = wasAnimated;
+    if (isAnimated) {
+      lastAnimTime = performance.now();
+      requestAnimationFrame(animateLoop);
+    } else {
+      generateVariants();
+    }
+  } catch (err) {
+    console.error('GIF export failed:', err);
+  } finally {
+    header.textContent = originalText;
+  }
+}
+
+// Custom Cursor Logic
+const trailer = document.getElementById("trailer");
+const trailerIcon = document.getElementById("trailer-icon");
+let currentHoverType = "";
+
+const animateTrailer = (e, interacting) => {
+  // Offset by 12px so it acts like a "petal" to the bottom-right of the real cursor
+  const x = e.clientX + 12;
+  const y = e.clientY + 12;
+  const scale = interacting ? 3.5 : 1;
+
+  trailer.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+};
+
+const getTrailerIcon = type => {
+  switch (type) {
+    case "slider":
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3L4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/></svg>`;
+    case "download":
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+    case "upload":
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
+    default:
+      return "";
+  }
+};
+
+window.addEventListener("mousemove", e => {
+  const interactable = e.target.closest(".interactable");
+  const interacting = interactable !== null;
+  animateTrailer(e, interacting);
+
+  const newType = interacting ? interactable.dataset.type : "";
+
+  if (newType !== currentHoverType) {
+    currentHoverType = newType;
+    trailer.dataset.type = newType;
+    if (interacting) {
+      trailerIcon.innerHTML = getTrailerIcon(newType);
+    }
+  }
+});
