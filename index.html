@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description"
-    content="Convert a flag SVG into emoji-style PNGs tuned for major platforms. Upload, preview, download.">
+    content="Convert flag artwork (SVG, PNG, JPG, WebP) into emoji-style PNGs for major platforms. Upload, preview, download.">
   <title>Flagoji</title>
   <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
   <link href="https://api.fontshare.com/v2/css?f[]=ranade@300&f[]=archivo@600&display=swap" rel="stylesheet">
@@ -31,8 +31,10 @@
       <section class="col-input" aria-label="Upload flag">
         <p class="section-label">Upload Flag</p>
         <div class="upload-area interactable" data-type="upload" id="dropZone">
-          <p>Drop an SVG here, or click to choose a file.</p>
-          <input type="file" id="fileInput" accept=".svg" aria-label="Choose SVG file">
+          <p>Drop a file here, or click to choose — SVG, PNG, JPG, or WebP.</p>
+          <input type="file" id="fileInput"
+            accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
+            aria-label="Choose flag image file">
           <div class="error-msg" id="errorMsg" role="alert"></div>
         </div>
         <p class="footnote">Artwork is fitted to a 3:2 frame, then masked and lit per platform. Header or canvas
@@ -49,7 +51,7 @@
           <button type="button" class="aa-toggle active interactable" data-type="aa" id="aaToggle"
             aria-pressed="true">Smoothing</button>
         </div>
-        <p class="empty-output" id="outputPlaceholder">Previews appear after you add an SVG.</p>
+        <p class="empty-output" id="outputPlaceholder">Previews appear after you add artwork.</p>
         <div class="previews" id="previewsContainer" style="display: none;">
           <div class="preview-card" id="card-apple">
             <div class="preview-header interactable" data-type="download" onclick="downloadPng('apple')">

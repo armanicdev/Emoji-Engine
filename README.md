@@ -1,10 +1,10 @@
 # Flagoji
 
-Client-side tool: upload a flag SVG, get emoji-style PNGs per platform (Apple, Google, Samsung, Twitter, WhatsApp, Huawei). Optional motion preview and GIF export. No build step—open `index.html` in a modern browser.
+Client-side tool: upload flag artwork as **SVG, PNG, JPG, or WebP**, get emoji-style PNGs per platform (Apple, Google, Samsung, Twitter, WhatsApp, Huawei). Rasters are cropped to a 3:2 frame (cover). Optional motion preview and GIF export. No build step—open `index.html` in a modern browser.
 
 ## What it does
 
-- Normalizes SVG to a 3:2 frame, masks with rounded corners, applies platform-specific wave and lighting in canvas.
+- Normalizes SVG to a 3:2 frame; rasters use **cover** (center crop) into the same frame. Then masks with rounded corners and applies platform-specific wave and lighting in canvas.
 - **Motion**: animates the wave; downloads become GIF when motion is on, PNG when off.
 - **Smoothing**: toggles canvas image smoothing (preview and export).
 - **Per-platform sliders**: wave, stroke, shadow, gloss, and related parameters per style.

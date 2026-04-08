@@ -304,15 +304,74 @@ const defaultSvg = `<svg width="200" height="132" viewBox="0 0 200 132" fill="no
 </svg>`;
 processSvg(defaultSvg);
 
+/** Normalized flag bitmap size (must match renderVariant FLAG_W / FLAG_H at scale 1). */
+const SOURCE_FLAG_W = 420;
+const SOURCE_FLAG_H = 280;
+
+const RASTER_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+function isSvgFile(file) {
+  const t = (file.type || '').toLowerCase();
+  if (t === 'image/svg+xml') return true;
+  return /\.svg$/i.test(file.name || '');
+}
+
+function isRasterFile(file) {
+  const t = (file.type || '').toLowerCase();
+  if (RASTER_MIME.includes(t)) return true;
+  return /\.(jpe?g|png|webp)$/i.test(file.name || '');
+}
+
 function handleFile(file) {
   errorMsg.style.display = 'none';
-  if (file.type !== 'image/svg+xml') {
-    return showError('Please upload a valid SVG file.');
+  if (isSvgFile(file)) {
+    const reader = new FileReader();
+    reader.onload = (e) => processSvg(e.target.result);
+    reader.readAsText(file);
+    return;
   }
+  if (isRasterFile(file)) {
+    processRasterFile(file);
+    return;
+  }
+  showError('Please upload SVG, PNG, JPG, or WebP.');
+}
 
-  const reader = new FileReader();
-  reader.onload = (e) => processSvg(e.target.result);
-  reader.readAsText(file);
+/**
+ * Raster images are scaled with object-fit: cover into SOURCE_FLAG_W×SOURCE_FLAG_H,
+ * then the existing warp path treats the result like SVG output.
+ */
+function processRasterFile(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    if (!nw || !nh) {
+      return showError('Could not read image dimensions.');
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = SOURCE_FLAG_W;
+    canvas.height = SOURCE_FLAG_H;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = isAntiAliased;
+    const scale = Math.max(SOURCE_FLAG_W / nw, SOURCE_FLAG_H / nh);
+    const dw = nw * scale;
+    const dh = nh * scale;
+    const dx = (SOURCE_FLAG_W - dw) / 2;
+    const dy = (SOURCE_FLAG_H - dh) / 2;
+    ctx.drawImage(img, 0, 0, nw, nh, dx, dy, dw, dh);
+    currentImg = canvas;
+    clearCaches();
+    generateVariants();
+    triggerHaptic('success', { intensity: 0.36 });
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    showError('Failed to load image.');
+  };
+  img.src = url;
 }
 
 function processSvg(svgString) {
