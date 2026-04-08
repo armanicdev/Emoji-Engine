@@ -3,11 +3,12 @@
 # Manual run: GitHub repo → Actions → "Deploy to Hostinger" → Run workflow.
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
-#   HOSTINGER_FTP_HOST   — e.g. ftp.yourdomain.com (no ftp:// prefix)
+#   HOSTINGER_FTP_HOST   — copy from hPanel (often not the same as the public domain; no ftp:// prefix)
 #   HOSTINGER_FTP_USER   — FTP username from Hostinger hPanel
 #   HOSTINGER_FTP_PASSWORD
 #
-# Deploy target: public_html/flagoji/ (site URL: https://yourdomain.com/flagoji/)
+# Deploy target: public_html/flagoji/
+# Public URL is usually https://flagoji.armanic.studio/ if that subdomain’s document root is this folder.
 
 name: Deploy to Hostinger
 

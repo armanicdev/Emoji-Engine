@@ -9,12 +9,13 @@ Run **`npm run build`** before deploy (minified JS/CSS). For local preview, use 
 The workflow [`.github/workflows/deploy-hostinger.yml`](.github/workflows/deploy-hostinger.yml) **builds on GitHub** and **uploads over FTP** whenever you **push to `main`** (including **merging a Pull Request** into `main`). You do not run `npm` on Hostinger.
 
 1. Push this repo to GitHub (default branch should be `main` or `master`).
-2. In **Hostinger hPanel** → **Files** → **FTP Accounts** (or **Advanced** → **FTP**), note the **FTP host**, **username**, and **password**. This project deploys to **`public_html/flagoji/`** (subfolder); visit `https://yourdomain.com/flagoji/`.
-3. In GitHub: **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
-   - `HOSTINGER_FTP_HOST` — hostname only (e.g. `ftp.yourdomain.com`, no `ftp://`)
+2. In **Hostinger hPanel** → **Files** → **FTP Accounts** (or **Advanced** → **FTP**), copy the **FTP host**, **username**, and **password**. Use whatever host hPanel shows (it may **not** be `flagoji.armanic.studio` — that’s normal). This project uploads to **`public_html/flagoji/`** on the server.
+3. **Your live URL:** If the subdomain **flagoji.armanic.studio** is pointed at that same folder in hPanel (**Domains** → subdomain → document root = `public_html/flagoji`), open **`https://flagoji.armanic.studio/`**. If Flagoji is only a **subfolder** on the main domain instead, use **`https://armanic.studio/flagoji/`**.
+4. In GitHub: **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
+   - `HOSTINGER_FTP_HOST` — hostname only from hPanel (no `ftp://`)
    - `HOSTINGER_FTP_USER`
    - `HOSTINGER_FTP_PASSWORD`
-4. Commit and push the workflow file; or open **Actions** → **Deploy to Hostinger** → **Run workflow** to test.
+5. Commit and push the workflow file; or open **Actions** → **Deploy to Hostinger** → **Run workflow** to test.
 
 If your FTP home is already **`public_html`**, the workflow uses **`public_html/flagoji/`** as `server-dir` (path relative to FTP root). If your host nests differently, edit `server-dir` in the workflow file.
 
