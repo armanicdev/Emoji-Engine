@@ -597,7 +597,7 @@ function generateVariants() {
   tuningPanel.style.display = 'block';
 }
 
-function renderVariant(variant, img) {
+function renderVariant(variant, img, opts = {}) {
   const W = 512 * currentScale;
   const H = 512 * currentScale;
   const FLAG_W = 420 * currentScale;
@@ -813,23 +813,26 @@ function renderVariant(variant, img) {
   }
 
   // 3. Final Canvas (Shadows, Downscale)
-  const finalCanvas = document.getElementById(`preview-${variant}`);
+  const finalCanvas = opts.targetCanvas ?? document.getElementById(`preview-${variant}`);
   finalCanvas.width = 256 * currentScale;
   finalCanvas.height = 256 * currentScale;
   const fCtx = finalCanvas.getContext('2d');
   fCtx.imageSmoothingEnabled = isAntiAliased;
   fCtx.clearRect(0, 0, finalCanvas.width, finalCanvas.height);
 
-  // Draw shadow
-  if (preset.shadowOpacity > 0) {
+  const drawWarp = () => {
+    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, finalCanvas.width, finalCanvas.height);
+  };
+
+  if (!opts.omitShadow && preset.shadowOpacity > 0) {
     fCtx.save();
     fCtx.shadowColor = `rgba(0,0,0,${preset.shadowOpacity})`;
     fCtx.shadowBlur = pShadowBlur;
     fCtx.shadowOffsetY = pShadowY;
-    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, finalCanvas.width, finalCanvas.height);
+    drawWarp();
     fCtx.restore();
   } else {
-    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, finalCanvas.width, finalCanvas.height);
+    drawWarp();
   }
 }
 
@@ -859,6 +862,14 @@ function downloadPng(variant) {
 }
 window.downloadPng = downloadPng;
 
+function findTransparentPaletteIndex(palette) {
+  for (let i = 0; i < palette.length; i++) {
+    const entry = palette[i];
+    if (entry.length >= 4 && entry[3] === 0) return i;
+  }
+  return -1;
+}
+
 async function downloadGif(variant) {
   const card = document.getElementById(`card-${variant}`);
   const header = card.querySelector('h3');
@@ -878,26 +889,46 @@ async function downloadGif(variant) {
 
     const gif = GIFEncoder();
 
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = GIF_SIZE;
+    exportCanvas.height = GIF_SIZE;
+
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = GIF_SIZE;
     tempCanvas.height = GIF_SIZE;
     const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
     tempCtx.imageSmoothingEnabled = isAntiAliased;
 
+    const quantizeOpts = {
+      format: 'rgba4444',
+      oneBitAlpha: 127,
+      clearAlpha: true,
+      clearAlphaThreshold: 127,
+      clearAlphaColor: 0
+    };
+
     for (let i = 0; i < TOTAL_FRAMES; i++) {
       animationPhaseOffset = (i / TOTAL_FRAMES) * Math.PI * 2;
-      renderVariant(variant, currentImg);
+      renderVariant(variant, currentImg, { targetCanvas: exportCanvas, omitShadow: true });
 
-      const srcCanvas = document.getElementById(`preview-${variant}`);
       tempCtx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
-      tempCtx.fillStyle = '#f4f1ea';
-      tempCtx.fillRect(0, 0, GIF_SIZE, GIF_SIZE);
-      tempCtx.drawImage(srcCanvas, 0, 0);
+      tempCtx.drawImage(exportCanvas, 0, 0);
 
       const { data } = tempCtx.getImageData(0, 0, GIF_SIZE, GIF_SIZE);
-      const palette = quantize(data, 256);
-      const index = applyPalette(data, palette);
-      gif.writeFrame(index, GIF_SIZE, GIF_SIZE, { palette, delay: FRAME_DELAY });
+      const palette = quantize(data, 256, quantizeOpts);
+      const index = applyPalette(data, palette, 'rgba4444');
+      const transparentIndex = findTransparentPaletteIndex(palette);
+
+      const frameOpts = {
+        palette,
+        delay: FRAME_DELAY,
+        ...(i === 0 ? { repeat: 0 } : {})
+      };
+      if (transparentIndex >= 0) {
+        frameOpts.transparent = true;
+        frameOpts.transparentIndex = transparentIndex;
+      }
+      gif.writeFrame(index, GIF_SIZE, GIF_SIZE, frameOpts);
 
       if (i % 5 === 0) {
         await new Promise(r => setTimeout(r, 0));
