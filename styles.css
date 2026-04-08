@@ -85,6 +85,10 @@
       visibility: hidden;
     }
 
+    body.app--booting .flowers-bottom {
+      visibility: hidden;
+    }
+
     body.app--ready #app-main {
       visibility: visible;
     }
@@ -124,6 +128,22 @@
     }
 
     body.app--ready .app-reveal--3 {
+      transition-delay: 130ms;
+    }
+
+    /* Footer: opacity-only reveal — transform on this block isolates mix-blend-mode (loses darken vs body/noise) */
+    .flowers-bottom.app-reveal {
+      opacity: 0;
+      transform: none;
+    }
+
+    body.app--ready .flowers-bottom.app-reveal {
+      opacity: 1;
+      transform: none;
+      transition: opacity 0.5s ease;
+    }
+
+    body.app--ready .flowers-bottom.app-reveal--3 {
       transition-delay: 130ms;
     }
 
