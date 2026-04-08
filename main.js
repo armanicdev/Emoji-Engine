@@ -1,3 +1,5 @@
+import { processGifFramePixels } from './gif-export-frame.js';
+
 // Initialize Lenis for smooth scrolling
 const lenis = new Lenis({
   duration: 0.8,
@@ -862,12 +864,58 @@ function downloadPng(variant) {
 }
 window.downloadPng = downloadPng;
 
-function findTransparentPaletteIndex(palette) {
-  for (let i = 0; i < palette.length; i++) {
-    const entry = palette[i];
-    if (entry.length >= 4 && entry[3] === 0) return i;
+let gifFrameWorker = null;
+let gifFrameWorkerBroken = false;
+
+function getGifFrameWorker() {
+  if (gifFrameWorkerBroken) return null;
+  if (gifFrameWorker) return gifFrameWorker;
+  try {
+    gifFrameWorker = new Worker(new URL('./gif-export-worker.js', import.meta.url), { type: 'module' });
+    return gifFrameWorker;
+  } catch {
+    gifFrameWorkerBroken = true;
+    return null;
   }
-  return -1;
+}
+
+function runGifFrameWorker(buffer, width, height, quantizeOpts) {
+  const w = getGifFrameWorker();
+  if (!w) return Promise.reject(new Error('Worker unavailable'));
+  return new Promise((resolve, reject) => {
+    const onMessage = (e) => {
+      w.removeEventListener('message', onMessage);
+      w.removeEventListener('error', onError);
+      if (!e.data.ok) reject(new Error(e.data.error));
+      else resolve(e.data);
+    };
+    const onError = (err) => {
+      w.removeEventListener('message', onMessage);
+      w.removeEventListener('error', onError);
+      reject(err);
+    };
+    w.addEventListener('message', onMessage);
+    w.addEventListener('error', onError);
+    const transferable = buffer.slice(0);
+    w.postMessage({ buffer: transferable, width, height, quantizeOpts }, [transferable]);
+  });
+}
+
+async function processGifFrameForExport(imageData, width, height, quantizeOpts) {
+  const pixels = new Uint8ClampedArray(imageData.data);
+  const w = getGifFrameWorker();
+  if (w) {
+    try {
+      return await runGifFrameWorker(pixels.buffer, width, height, quantizeOpts);
+    } catch {
+      gifFrameWorkerBroken = true;
+      if (gifFrameWorker) {
+        gifFrameWorker.terminate();
+        gifFrameWorker = null;
+      }
+    }
+  }
+  return processGifFramePixels(pixels, width, height, quantizeOpts);
 }
 
 async function downloadGif(variant) {
@@ -877,7 +925,7 @@ async function downloadGif(variant) {
   header.textContent = 'Exporting…';
 
   try {
-    const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
+    const { GIFEncoder } = await loadGifenc();
 
     const GIF_SIZE = 256 * currentScale;
     const TOTAL_FRAMES = 30;
@@ -904,7 +952,8 @@ async function downloadGif(variant) {
       oneBitAlpha: 127,
       clearAlpha: true,
       clearAlphaThreshold: 127,
-      clearAlphaColor: 0
+      clearAlphaColor: 0,
+      useSqrt: true
     };
 
     for (let i = 0; i < TOTAL_FRAMES; i++) {
@@ -914,10 +963,13 @@ async function downloadGif(variant) {
       tempCtx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
       tempCtx.drawImage(exportCanvas, 0, 0);
 
-      const { data } = tempCtx.getImageData(0, 0, GIF_SIZE, GIF_SIZE);
-      const palette = quantize(data, 256, quantizeOpts);
-      const index = applyPalette(data, palette, 'rgba4444');
-      const transparentIndex = findTransparentPaletteIndex(palette);
+      const imageData = tempCtx.getImageData(0, 0, GIF_SIZE, GIF_SIZE);
+      const { index, palette, transparentIndex } = await processGifFrameForExport(
+        imageData,
+        GIF_SIZE,
+        GIF_SIZE,
+        quantizeOpts
+      );
 
       const frameOpts = {
         palette,
