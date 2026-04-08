@@ -106,13 +106,37 @@
       bottom: clamp(10px, 3vw, 20px);
       translate: -50% 0;
       line-height: 0;
+      max-width: calc(100% - 24px);
     }
 
-    .flowers-bottom__logo {
+    .flowers-bottom__credit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #fff;
+      line-height: 1.2;
+      text-align: center;
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    .flowers-bottom__credit-part {
+      white-space: nowrap;
+    }
+
+    .flowers-bottom__credit-logo {
       display: block;
-      height: 32px;
+      height: 18px;
       width: auto;
-      max-width: none;
+      flex-shrink: 0;
+      transform: translateY(-2px);
     }
 
     @media (max-width: 640px) {
