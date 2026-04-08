@@ -1,43 +1,29 @@
-# Emoji Flag Engine
+# Flagoji
 
-A client-side web tool that converts flat SVG flags into 3D, wavy emoji-style PNGs and looping animated GIFs. It accurately replicates the design language of major tech platforms (Apple, Google, Samsung, Twitter, WhatsApp, and Huawei).
+Client-side tool: upload a flag SVG, get emoji-style PNGs per platform (Apple, Google, Samsung, Twitter, WhatsApp, Huawei). Optional motion preview and GIF export. No build step—open `index.html` in a modern browser.
 
-## Features
+## What it does
 
-- **Live Canvas Pixel Warping**: Real-time trigonometric wave distortion and 3D lighting calculation (no backend required).
-- **Multiple Platform Styles**:
-  - **Apple**: Deep wave, bright center peak, thin edge shadows.
-  - **Twitter (Twemoji)**: Flat, pill-shaped, soft drop shadow.
-  - **Samsung**: Soft top-to-bottom gloss, 3D bevel stroke, shifted highlight.
-  - **Google**: Pillowy lighting, subtle wave, crisp vector border.
-  - **WhatsApp**: Vibrant "S" wave, thick 3D bevel, bright top-left highlight.
-  - **Huawei**: Flat shape, high-frequency vertical lighting ripples.
-- **Animated GIF Export**: Generate seamless, perfect-looping GIFs of the waving flags using the built-in `gifenc` engine.
-- **Tunable Parameters**: Adjust wave amplitude, phase, frequency, lighting intensity, corner radius, and shadow blur for each style independently.
-- **Smooth UX**: Features Lenis smooth scrolling, custom trailing cursor, and Web Haptics API integration for tactile feedback.
+- Normalizes SVG to a 3:2 frame, masks with rounded corners, applies platform-specific wave and lighting in canvas.
+- **Motion**: animates the wave; downloads become GIF when motion is on, PNG when off.
+- **Smoothing**: toggles canvas image smoothing (preview and export).
+- **Per-platform sliders**: wave, stroke, shadow, gloss, and related parameters per style.
 
-## Usage
+## Files
 
-1. Clone or download this repository.
-2. Open `index.html` in any modern web browser (no build step or server required).
-3. Drag and drop your own flat SVG flag onto the input area.
-4. Toggle between **STATIC** and **GIF** modes using the header button.
-5. Click the download buttons to export your emoji!
+| File | Role |
+|------|------|
+| `index.html` | Layout and copy |
+| `styles.css` | Layout, type, controls, cursor trailer |
+| `main.js` | SVG load, warp engine, cache, GIF export, haptics |
+| `flowers.webp` | Footer decoration |
 
-## Architecture
+## Dependencies (CDN)
 
-- `index.html`: The main UI structure.
-- `styles.css`: All styling, including the custom cursor and smooth CSS grid accordion animations.
-- `main.js`: The core logic. Contains the Canvas pixel warp engine, the static caching system (for 60 FPS performance), and the GIF rendering loop.
-- `flowers.webp`: The decorative background image.
+- [Lenis](https://github.com/darkroomengineering/lenis) — scroll smoothing  
+- [gifenc](https://github.com/mattdesl/gifenc) — GIF encoding  
+- Optional: `web-haptics` (dynamic import) with `navigator.vibrate` fallback  
 
-## Performance
+## Performance notes
 
-The engine is heavily optimized to run at 60 FPS:
-- **Static Caching**: The base flag and static overlays are rendered once to an off-screen canvas and cached as raw `ImageData`.
-- **Math Hoisting**: Trigonometric calculations (`Math.sin`, `Math.cos`) for the X-axis wave are pre-calculated into a `Float32Array` before the massive Y-axis pixel loop, saving hundreds of thousands of operations per frame.
-
-## Dependencies
-
-- [Lenis](https://github.com/studio-freight/lenis) (via CDN) for smooth scrolling.
-- [gifenc](https://github.com/mattdesl/gifenc) (via CDN) for fast, pure-JS GIF encoding.
+Static flag layers are cached per variant; slider changes re-render only the touched variant. Wave math along X is hoisted into a buffer before the per-pixel Y pass.

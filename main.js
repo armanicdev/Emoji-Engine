@@ -30,12 +30,13 @@ function toggleAnimation() {
   void btn.offsetWidth; // force reflow
   btn.classList.add('gif-toggle--spin-once');
 
+  btn.setAttribute('aria-pressed', String(isAnimated));
   if (isAnimated) {
-    label.textContent = 'STATIC';
+    label.textContent = 'Still';
     lastAnimTime = performance.now();
     requestAnimationFrame(animateLoop);
   } else {
-    label.textContent = 'GIF';
+    label.textContent = 'Motion';
     animationPhaseOffset = 0;
     if (currentImg) generateVariants();
   }
@@ -235,6 +236,22 @@ const PARAM_VARIANT_LABEL = {
   whatsapp: 'WhatsApp'
 };
 
+/** UI labels for preset keys (camelCase → sentence case). */
+const PARAM_KEY_LABEL = {
+  waveAmplitude: 'Wave amplitude',
+  waveFrequency: 'Wave frequency',
+  wavePhase: 'Wave phase',
+  lightIntensity: 'Light intensity',
+  cornerRadius: 'Corner radius',
+  strokeWidth: 'Stroke width',
+  innerStrokeOpacity: 'Inner stroke opacity',
+  strokeOpacity: 'Stroke opacity',
+  shadowBlur: 'Shadow blur',
+  shadowY: 'Shadow offset Y',
+  shadowOpacity: 'Shadow opacity',
+  glossOpacity: 'Gloss opacity'
+};
+
 initHaptics();
 
 dropZone.addEventListener('pointerdown', () => {
@@ -326,6 +343,7 @@ function processSvg(svgString) {
   const img = new Image();
   img.onload = () => {
     currentImg = img;
+    clearCaches();
     generateVariants();
     triggerHaptic('success', { intensity: 0.36 });
     URL.revokeObjectURL(url);
@@ -345,11 +363,14 @@ function initSliders() {
     const details = document.createElement('div');
     details.className = 'param-section accordion';
 
-    const summary = document.createElement('div');
+    const summary = document.createElement('button');
+    summary.type = 'button';
     summary.className = 'param-section__summary accordion__title';
-    summary.textContent = `${PARAM_VARIANT_LABEL[variant]} parameters`;
+    summary.textContent = PARAM_VARIANT_LABEL[variant];
+    summary.setAttribute('aria-expanded', 'false');
     summary.addEventListener('click', () => {
-      details.classList.toggle('accordion--visible');
+      const open = details.classList.toggle('accordion--visible');
+      summary.setAttribute('aria-expanded', String(open));
     });
 
     const dropdown = document.createElement('div');
@@ -394,8 +415,9 @@ function initSliders() {
 
       const group = document.createElement('div');
       group.className = 'control-group';
+      const keyLabel = PARAM_KEY_LABEL[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
       group.innerHTML = `
-            <label for="${id}">${key} <span class="val" id="${id}-val">${Number(value).toFixed(2)}</span></label>
+            <label for="${id}">${keyLabel} <span class="val" id="${id}-val">${Number(value).toFixed(2)}</span></label>
             <div class="seek-control" id="${id}-seek">
               <input type="range" class="interactable" data-type="slider" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}">
               <div class="control__track" aria-hidden="true">
@@ -422,7 +444,8 @@ function initSliders() {
         valSpan.textContent = newVal.toFixed(2);
         syncSeek();
         maybeTriggerSliderTick(id, newVal);
-        generateVariants();
+        delete variantCaches[variant];
+        scheduleVariantRender(variant);
       });
       input.addEventListener('pointerdown', () => {
         syncSeek();
@@ -449,9 +472,56 @@ function initSliders() {
 
 // Global caches for the animation engine
 const variantCaches = {};
+let currentScale = 1;
+let isAntiAliased = true;
+
+// rAF-based render scheduler: batches slider input into one frame, renders only the changed variant
+let _pendingVariant = null;
+let _renderRafId = 0;
+
+function scheduleVariantRender(variant) {
+  _pendingVariant = variant;
+  if (!_renderRafId) {
+    _renderRafId = requestAnimationFrame(() => {
+      _renderRafId = 0;
+      const v = _pendingVariant;
+      _pendingVariant = null;
+      if (v && currentImg) {
+        renderVariant(v, currentImg);
+      }
+    });
+  }
+}
 
 function clearCaches() {
   Object.keys(variantCaches).forEach(k => delete variantCaches[k]);
+}
+
+// Initialize scale and AA controls
+document.querySelectorAll('.scale-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    currentScale = parseFloat(e.target.dataset.scale);
+    clearCaches();
+    if (currentImg) generateVariants();
+  });
+});
+
+const aaToggle = document.getElementById('aaToggle');
+if (aaToggle) {
+  aaToggle.addEventListener('click', () => {
+    isAntiAliased = !isAntiAliased;
+    aaToggle.classList.toggle('active', isAntiAliased);
+    aaToggle.setAttribute('aria-pressed', String(isAntiAliased));
+    clearCaches();
+    if (currentImg) generateVariants();
+
+    // Update trailer text immediately if currently hovering
+    if (currentHoverType === 'aa') {
+      trailerIcon.innerHTML = getTrailerIcon('aa');
+    }
+  });
 }
 
 function generateVariants() {
@@ -461,20 +531,27 @@ function generateVariants() {
     renderVariant(variant, currentImg);
   });
 
+  const outputControls = document.getElementById('outputControls');
+  if (outputControls) outputControls.style.display = 'flex';
   previewsContainer.style.display = 'grid';
   if (outputPlaceholder) outputPlaceholder.style.display = 'none';
   tuningPanel.style.display = 'block';
 }
 
 function renderVariant(variant, img) {
-  const W = 512;
-  const H = 512;
-  const FLAG_W = 420;
-  const FLAG_H = 280;
+  const W = 512 * currentScale;
+  const H = 512 * currentScale;
+  const FLAG_W = 420 * currentScale;
+  const FLAG_H = 280 * currentScale;
   const FLAG_X = (W - FLAG_W) / 2;
   const FLAG_Y = (H - FLAG_H) / 2;
 
   const preset = STYLE_PRESETS[variant];
+  const pRadius = preset.cornerRadius * currentScale;
+  const pStroke = preset.strokeWidth * currentScale;
+  const pShadowBlur = preset.shadowBlur * currentScale;
+  const pShadowY = preset.shadowY * currentScale;
+  const pWaveAmp = preset.waveAmplitude * currentScale;
 
   // 1. Static Cache Generation (run once per image/slider change)
   if (!variantCaches[variant]) {
@@ -482,10 +559,11 @@ function renderVariant(variant, img) {
     srcCanvas.width = W;
     srcCanvas.height = H;
     const sCtx = srcCanvas.getContext('2d', { willReadFrequently: true });
+    sCtx.imageSmoothingEnabled = isAntiAliased;
 
     // Draw rounded rect path
     sCtx.beginPath();
-    sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, preset.cornerRadius);
+    sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, pRadius);
     sCtx.closePath();
 
     // Clip and draw image
@@ -521,8 +599,8 @@ function renderVariant(variant, img) {
     if (variant === 'samsung') {
       sCtx.save();
       sCtx.beginPath();
-      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, preset.cornerRadius);
-      sCtx.lineWidth = preset.strokeWidth * 2;
+      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, pRadius);
+      sCtx.lineWidth = pStroke * 2;
       const strokeGrad = sCtx.createLinearGradient(0, FLAG_Y, 0, FLAG_Y + FLAG_H);
       strokeGrad.addColorStop(0, `rgba(255,255,255,0.4)`);
       strokeGrad.addColorStop(0.1, `rgba(255,255,255,0.05)`);
@@ -535,8 +613,8 @@ function renderVariant(variant, img) {
     } else if (variant === 'whatsapp') {
       sCtx.save();
       sCtx.beginPath();
-      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, preset.cornerRadius);
-      sCtx.lineWidth = preset.strokeWidth * 2;
+      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, pRadius);
+      sCtx.lineWidth = pStroke * 2;
       sCtx.clip();
 
       const strokeGrad = sCtx.createLinearGradient(0, FLAG_Y, 0, FLAG_Y + FLAG_H);
@@ -550,8 +628,8 @@ function renderVariant(variant, img) {
       const opacity = preset.innerStrokeOpacity || preset.strokeOpacity;
       sCtx.save();
       sCtx.beginPath();
-      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, preset.cornerRadius);
-      sCtx.lineWidth = preset.strokeWidth * 2;
+      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, pRadius);
+      sCtx.lineWidth = pStroke * 2;
       sCtx.strokeStyle = `rgba(0,0,0,${opacity})`;
       sCtx.clip();
       sCtx.stroke();
@@ -568,93 +646,107 @@ function renderVariant(variant, img) {
       srcData: sCtx.getImageData(0, 0, W, H).data,
       warpCanvas,
       wCtx,
-      destImgData: wCtx.createImageData(W, H)
+      destImgData: wCtx.createImageData(W, H),
+      xMath: new Float32Array(W * 2),
+      destU32: null
     };
+    variantCaches[variant].destU32 = new Uint32Array(variantCaches[variant].destImgData.data.buffer);
   }
 
   const cache = variantCaches[variant];
-  const { srcCanvas, srcData, warpCanvas, wCtx, destImgData } = cache;
+  const { srcCanvas, srcData, warpCanvas, wCtx, destImgData, xMath, destU32 } = cache;
   const destData = destImgData.data;
 
   // 2. Warp Canvas
   if (variant === 'twitter') {
     wCtx.drawImage(srcCanvas, 0, 0);
   } else {
-    // Pre-calculate X-axis math to save 260,000+ trig calls per frame
-    const xMath = new Float32Array(W * 2); // [dy, light, dy, light, ...]
+    const isHuawei = variant === 'huawei';
+    const twoPiFreq = Math.PI * 2 * preset.waveFrequency;
+    const phaseTotal = preset.wavePhase + animationPhaseOffset;
+    const lightI = preset.lightIntensity;
+    const invFlagW = 1 / FLAG_W;
+    const Hm1 = H - 1;
+    const W4 = W * 4;
+
     for (let x = 0; x < W; x++) {
-      const nx = (x - FLAG_X) / FLAG_W;
+      const nx = (x - FLAG_X) * invFlagW;
       let dy = 0;
       let light = 0;
 
       if (nx >= 0 && nx <= 1) {
-        const angle = nx * Math.PI * 2 * preset.waveFrequency + preset.wavePhase + animationPhaseOffset;
+        const angle = nx * twoPiFreq + phaseTotal;
+        const sinA = Math.sin(angle);
+        const cosA = Math.cos(angle);
 
         if (variant === 'apple') {
-          dy = Math.sin(angle) * preset.waveAmplitude;
-          const slopeLight = -Math.cos(angle);
-          const heightLight = -Math.sin(angle);
-          const rightEdgeShadow = Math.pow(nx, 20) * 1.2;
-          light = (slopeLight * 0.7 + heightLight * 0.3 - rightEdgeShadow) * preset.lightIntensity;
+          dy = sinA * pWaveAmp;
+          light = (-cosA * 0.7 - sinA * 0.3 - Math.pow(nx, 20) * 1.2) * lightI;
         } else if (variant === 'samsung') {
-          dy = -Math.sin(angle) * preset.waveAmplitude;
-          light = Math.sin(angle - Math.PI / 4) * preset.lightIntensity;
+          dy = -sinA * pWaveAmp;
+          light = Math.sin(angle - 0.7853981633974483) * lightI;
         } else if (variant === 'google') {
-          dy = Math.sin(angle) * preset.waveAmplitude;
-          light = -Math.cos(angle) * preset.lightIntensity;
+          dy = sinA * pWaveAmp;
+          light = -cosA * lightI;
         } else if (variant === 'whatsapp') {
-          dy = Math.sin(angle) * preset.waveAmplitude;
-          light = -Math.sin(angle) * preset.lightIntensity;
+          dy = sinA * pWaveAmp;
+          light = -sinA * lightI;
         }
       }
-      xMath[x * 2] = dy;
-      xMath[x * 2 + 1] = light;
+      const off = x << 1;
+      xMath[off] = dy;
+      xMath[off | 1] = light;
     }
 
+    // Zero the entire dest buffer via the Uint32 view (faster than per-byte)
+    destU32.fill(0);
+
+    const invFlagH = 1 / FLAG_H;
+
     for (let y = 0; y < H; y++) {
-      const ny = (y - FLAG_Y) / FLAG_H;
+      const rowOff = y * W4;
+      const ny = (y - FLAG_Y) * invFlagH;
 
       for (let x = 0; x < W; x++) {
-        const nx = (x - FLAG_X) / FLAG_W;
-        let dy = xMath[x * 2];
-        let light = xMath[x * 2 + 1];
+        const off = x << 1;
+        let dy = xMath[off];
+        let light = xMath[off | 1];
 
-        // Huawei requires Y-axis math because the wave is tilted diagonally
-        if (variant === 'huawei' && nx >= 0 && nx <= 1) {
-          const tiltedNx = nx + (ny * 0.15);
-          const huaweiAngle = tiltedNx * Math.PI * 2 * preset.waveFrequency + preset.wavePhase + animationPhaseOffset;
-          dy = 0;
-          const smoothMultiplier = 0.375 - 0.125 * Math.sin(huaweiAngle);
-          light = Math.sin(huaweiAngle) * preset.lightIntensity * smoothMultiplier;
+        if (isHuawei) {
+          const nx = (x - FLAG_X) * invFlagW;
+          if (nx >= 0 && nx <= 1) {
+            const huaweiAngle = (nx + ny * 0.15) * twoPiFreq + phaseTotal;
+            const sinH = Math.sin(huaweiAngle);
+            dy = 0;
+            light = sinH * lightI * (0.375 - 0.125 * sinH);
+          }
         }
 
         const srcY = y - dy;
 
-        if (srcY >= 0 && srcY < H - 1) {
-          const y1 = Math.floor(srcY);
-          const y2 = y1 + 1;
+        if (srcY >= 0 && srcY < Hm1) {
+          const y1 = srcY | 0;
           const fy = srcY - y1;
+          const ify = 1 - fy;
 
-          const idx1 = (y1 * W + x) * 4;
-          const idx2 = (y2 * W + x) * 4;
-          const destIdx = (y * W + x) * 4;
+          const idx1 = (y1 * W + x) << 2;
+          const idx2 = idx1 + W4;
+          const destIdx = rowOff + (x << 2);
 
-          const alpha1 = srcData[idx1 + 3];
-          const alpha2 = srcData[idx2 + 3];
-          const outAlpha = alpha1 * (1 - fy) + alpha2 * fy;
+          const a1 = srcData[idx1 + 3];
+          const a2 = srcData[idx2 + 3];
+          const outAlpha = a1 * ify + a2 * fy;
 
           if (outAlpha > 0) {
-            for (let c = 0; c < 3; c++) {
-              const val = srcData[idx1 + c] * (1 - fy) + srcData[idx2 + c] * fy;
-              destData[destIdx + c] = Math.min(255, Math.max(0, val + light));
-            }
+            let v;
+            v = srcData[idx1] * ify + srcData[idx2] * fy + light;
+            destData[destIdx] = v > 255 ? 255 : v < 0 ? 0 : v;
+            v = srcData[idx1 + 1] * ify + srcData[idx2 + 1] * fy + light;
+            destData[destIdx + 1] = v > 255 ? 255 : v < 0 ? 0 : v;
+            v = srcData[idx1 + 2] * ify + srcData[idx2 + 2] * fy + light;
+            destData[destIdx + 2] = v > 255 ? 255 : v < 0 ? 0 : v;
             destData[destIdx + 3] = outAlpha;
-          } else {
-            destData[destIdx + 3] = 0; // Clear alpha for transparent pixels
           }
-        } else {
-          const destIdx = (y * W + x) * 4;
-          destData[destIdx + 3] = 0; // Clear alpha for out-of-bounds pixels
         }
       }
     }
@@ -663,19 +755,22 @@ function renderVariant(variant, img) {
 
   // 3. Final Canvas (Shadows, Downscale)
   const finalCanvas = document.getElementById(`preview-${variant}`);
+  finalCanvas.width = 256 * currentScale;
+  finalCanvas.height = 256 * currentScale;
   const fCtx = finalCanvas.getContext('2d');
-  fCtx.clearRect(0, 0, 256, 256);
+  fCtx.imageSmoothingEnabled = isAntiAliased;
+  fCtx.clearRect(0, 0, finalCanvas.width, finalCanvas.height);
 
   // Draw shadow
   if (preset.shadowOpacity > 0) {
     fCtx.save();
     fCtx.shadowColor = `rgba(0,0,0,${preset.shadowOpacity})`;
-    fCtx.shadowBlur = preset.shadowBlur;
-    fCtx.shadowOffsetY = preset.shadowY;
-    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, 256, 256);
+    fCtx.shadowBlur = pShadowBlur;
+    fCtx.shadowOffsetY = pShadowY;
+    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, finalCanvas.width, finalCanvas.height);
     fCtx.restore();
   } else {
-    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, 256, 256);
+    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, finalCanvas.width, finalCanvas.height);
   }
 }
 
@@ -709,12 +804,12 @@ async function downloadGif(variant) {
   const card = document.getElementById(`card-${variant}`);
   const header = card.querySelector('h3');
   const originalText = header.textContent;
-  header.textContent = 'RENDERING...';
+  header.textContent = 'Exporting…';
 
   try {
     const { GIFEncoder, quantize, applyPalette } = await loadGifenc();
 
-    const GIF_SIZE = 256;
+    const GIF_SIZE = 256 * currentScale;
     const TOTAL_FRAMES = 30;
     const FRAME_DELAY = Math.round(1000 / 30);
 
@@ -727,7 +822,8 @@ async function downloadGif(variant) {
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = GIF_SIZE;
     tempCanvas.height = GIF_SIZE;
-    const tempCtx = tempCanvas.getContext('2d');
+    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+    tempCtx.imageSmoothingEnabled = isAntiAliased;
 
     for (let i = 0; i < TOTAL_FRAMES; i++) {
       animationPhaseOffset = (i / TOTAL_FRAMES) * Math.PI * 2;
@@ -798,6 +894,10 @@ const getTrailerIcon = type => {
       return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
     case "upload":
       return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
+    case "refresh":
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`;
+    case "aa":
+      return `<span style="font-family: var(--font-display); font-weight: bold; font-size: 5px; text-transform: uppercase; letter-spacing: 0.05em;">${isAntiAliased ? 'on' : 'off'}</span>`;
     default:
       return "";
   }

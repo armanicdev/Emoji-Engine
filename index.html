@@ -4,7 +4,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SVG → img style PNG</title>
+  <meta name="description"
+    content="Convert a flag SVG into emoji-style PNGs tuned for major platforms. Upload, preview, download.">
+  <title>Flagoji</title>
   <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
   <link href="https://api.fontshare.com/v2/css?f[]=ranade@300&f[]=archivo@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
@@ -13,32 +15,41 @@
 <body>
   <div class="shell">
     <header class="masthead">
-      <h1>SVG → img style PNG</h1>
-      <button type="button" class="gif-toggle interactable" data-type="download" id="gifToggle"
-        onclick="toggleAnimation()">
+      <h1>Flagoji</h1>
+      <button type="button" class="gif-toggle interactable" data-type="refresh" id="gifToggle"
+        onclick="toggleAnimation()" aria-pressed="false" aria-label="Toggle animated preview and GIF export">
         <svg class="gif-toggle__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
           stroke-linejoin="round" aria-hidden="true">
           <polyline points="23 4 23 10 17 10" />
           <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
         </svg>
-        <span class="gif-toggle__label">GIF</span>
+        <span class="gif-toggle__label">Motion</span>
       </button>
     </header>
 
     <div class="main-stack">
-      <section class="col-input" aria-label="Input">
-        <p class="section-label">Input</p>
+      <section class="col-input" aria-label="Upload flag">
+        <p class="section-label">Upload Flag</p>
         <div class="upload-area interactable" data-type="upload" id="dropZone">
-          <p>Drop SVG or click — replaces default Kurdistan flag.</p>
-          <input type="file" id="fileInput" accept=".svg">
-          <div class="error-msg" id="errorMsg"></div>
+          <p>Drop an SVG here, or click to choose a file.</p>
+          <input type="file" id="fileInput" accept=".svg" aria-label="Choose SVG file">
+          <div class="error-msg" id="errorMsg" role="alert"></div>
         </div>
-        <p class="footnote">Rasterized rounded rect, wave warp on Apple/Samsung, tuned highlights. Download per vendor
-          below.</p>
+        <p class="footnote">Artwork is fitted to a 3:2 frame, then masked and lit per platform. Header or canvas
+          downloads PNG; enable motion first if you need GIF.</p>
       </section>
 
-      <section class="block-output" aria-label="Output">
-        <p class="empty-output" id="outputPlaceholder">Previews appear here after load.</p>
+      <section class="block-output" aria-label="Previews">
+        <div class="output-controls" id="outputControls" style="display: none;">
+          <button type="button" class="scale-btn" data-scale="0.5">0.5x</button>
+          <button type="button" class="scale-btn active" data-scale="1">1x</button>
+          <button type="button" class="scale-btn" data-scale="2">2x</button>
+          <button type="button" class="scale-btn" data-scale="3">3x</button>
+          <div class="divider-vertical"></div>
+          <button type="button" class="aa-toggle active interactable" data-type="aa" id="aaToggle"
+            aria-pressed="true">Smoothing</button>
+        </div>
+        <p class="empty-output" id="outputPlaceholder">Previews appear after you add an SVG.</p>
         <div class="previews" id="previewsContainer" style="display: none;">
           <div class="preview-card" id="card-apple">
             <div class="preview-header interactable" data-type="download" onclick="downloadPng('apple')">
@@ -121,7 +132,7 @@
         </div>
       </section>
 
-      <section class="tuning-block" id="tuningPanel" style="display: none;" aria-label="Parameters">
+      <section class="tuning-block" id="tuningPanel" style="display: none;" aria-label="Per-platform settings">
         <div class="param-groups" id="sliders"></div>
       </section>
     </div>
@@ -139,4 +150,5 @@
   <script src="https://unpkg.com/lenis@1.2.3/dist/lenis.min.js"></script>
   <script src="main.js" type="module"></script>
 </body>
+
 </html>
