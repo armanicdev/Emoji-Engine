@@ -61,6 +61,100 @@
       flex-direction: column;
     }
 
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .app-main {
+      display: flex;
+      flex-direction: column;
+      flex: 1 0 auto;
+      width: 100%;
+      min-width: 0;
+    }
+
+    body.app--booting #app-main {
+      visibility: hidden;
+    }
+
+    body.app--ready #app-main {
+      visibility: visible;
+    }
+
+    /* #app-loading uses inline layout + JS for fade-out */
+    .app-loading {
+      transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .app-loading__spinner {
+      animation: app-loading-spin 0.75s linear infinite;
+    }
+
+    @keyframes app-loading-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .app-reveal {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+
+    body.app--ready .app-reveal {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    body.app--ready .app-reveal--1 {
+      transition-delay: 0ms;
+    }
+
+    body.app--ready .app-reveal--2 {
+      transition-delay: 70ms;
+    }
+
+    body.app--ready .app-reveal--3 {
+      transition-delay: 130ms;
+    }
+
+    body.app--booting #trailer {
+      opacity: 0 !important;
+      pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .app-loading {
+        transition: none;
+      }
+
+      .app-loading__spinner {
+        animation: none;
+      }
+
+      body.app--booting #app-main {
+        visibility: visible;
+      }
+
+      .app-reveal {
+        opacity: 1;
+        transform: none;
+      }
+
+      body.app--ready .app-reveal {
+        transition: none;
+      }
+    }
+
     body::before {
       content: "";
       position: fixed;
@@ -86,7 +180,7 @@
       width: 100%;
       height: auto;
       max-width: 100%;
-      vertical-align: bottom;
+      aspect-ratio: 4096 / 727;
       mix-blend-mode: darken;
     }
 

@@ -1,5 +1,59 @@
 import { processGifFramePixels } from './gif-export-frame.js';
 
+function minDelay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Runs first so loader timing is not delayed by the rest of this module (~1000 lines). */
+async function initAppShell() {
+  const body = document.body;
+  const appMain = document.getElementById('app-main');
+  const loading = document.getElementById('app-loading');
+  const flowersImg = document.querySelector('.flowers-bottom__img');
+
+  const decodeFlowers =
+    flowersImg && typeof flowersImg.decode === 'function'
+      ? flowersImg.decode().catch(() => { })
+      : Promise.resolve();
+
+  const fontsReady =
+    document.fonts && typeof document.fonts.ready !== 'undefined'
+      ? document.fonts.ready
+      : Promise.resolve();
+
+  const tBoot = performance.now();
+  const MIN_VISIBLE_MS = 500;
+  const MAX_LOAD_WAIT_MS = 3200;
+
+  await Promise.race([
+    Promise.all([fontsReady.catch(() => { }), decodeFlowers]),
+    minDelay(MAX_LOAD_WAIT_MS)
+  ]);
+
+  await minDelay(Math.max(0, MIN_VISIBLE_MS - (performance.now() - tBoot)));
+
+  body.classList.remove('app--booting');
+  body.classList.add('app--ready');
+  body.setAttribute('aria-busy', 'false');
+  if (appMain) {
+    appMain.removeAttribute('inert');
+    appMain.setAttribute('aria-hidden', 'false');
+  }
+
+  window.__FLAGOJI_LOADER_UNLOCKED = true;
+
+  requestAnimationFrame(() => {
+    if (typeof window.FlagojiHideLoader === 'function') {
+      window.FlagojiHideLoader({ instant: false });
+    } else if (loading) {
+      loading.remove();
+      document.documentElement.style.overflow = '';
+    }
+  });
+}
+
+initAppShell();
+
 // Initialize Lenis for smooth scrolling
 const lenis = new Lenis({
   duration: 0.8,
@@ -1060,3 +1114,4 @@ window.addEventListener("mousemove", e => {
     }
   }
 });
+
