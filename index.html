@@ -7,8 +7,8 @@
   <meta name="description"
     content="Convert flag artwork (SVG, PNG, JPG, WebP) into emoji-style PNGs for major platforms. Upload, preview, download.">
   <title>Flagoji</title>
-  <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
-  <link href="https://api.fontshare.com/v2/css?f[]=ranade@300&f[]=archivo@600&display=swap" rel="stylesheet">
+  <link rel="preload" href="fonts/ranade-300.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/archivo-600.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -141,7 +141,11 @@
   </div>
 
   <div class="flowers-bottom" role="presentation" aria-hidden="true">
-    <img src="flowers.webp" alt="" decoding="async" fetchpriority="low">
+    <img class="flowers-bottom__img" src="flowers.webp" alt="" decoding="async" fetchpriority="low">
+    <div class="flowers-bottom__overlay"></div>
+    <div class="flowers-bottom__brand">
+      <img class="flowers-bottom__logo" src="logo.svg" alt="" width="35" height="32" decoding="async">
+    </div>
   </div>
 
   <div id="trailer">

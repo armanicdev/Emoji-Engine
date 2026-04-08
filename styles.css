@@ -1,6 +1,22 @@
+    @font-face {
+      font-family: "Ranade";
+      src: url("fonts/ranade-300.woff2") format("woff2");
+      font-weight: 300;
+      font-style: normal;
+      font-display: optional;
+    }
+
+    @font-face {
+      font-family: "Archivo";
+      src: url("fonts/archivo-600.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+      font-display: optional;
+    }
+
     :root {
-      --font-body: "Ranade", sans-serif;
-      --font-display: "Archivo", sans-serif;
+      --font-body: "Ranade", ui-sans-serif, system-ui, sans-serif;
+      --font-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
       --bg: #f4f1ea;
       --ink: #141414;
       --muted: #5c574c;
@@ -65,13 +81,38 @@
       line-height: 0;
     }
 
-    .flowers-bottom img {
+    .flowers-bottom__img {
       display: block;
       width: 100%;
       height: auto;
       max-width: 100%;
       vertical-align: bottom;
       mix-blend-mode: darken;
+    }
+
+    .flowers-bottom__overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(to bottom,
+          transparent 0%,
+          rgba(20, 20, 20, 0.12) 55%,
+          rgba(20, 20, 20, 0.38) 100%);
+    }
+
+    .flowers-bottom__brand {
+      position: absolute;
+      left: 50%;
+      bottom: clamp(10px, 3vw, 20px);
+      translate: -50% 0;
+      line-height: 0;
+    }
+
+    .flowers-bottom__logo {
+      display: block;
+      height: 32px;
+      width: auto;
+      max-width: none;
     }
 
     @media (max-width: 640px) {
@@ -83,7 +124,7 @@
         margin-left: calc((100vw - 200vw) / 2);
       }
 
-      .flowers-bottom img {
+      .flowers-bottom__img {
         width: 100%;
         max-width: none;
       }
