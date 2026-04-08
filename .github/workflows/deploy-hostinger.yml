@@ -1,0 +1,64 @@
+# Build the static site and upload to Hostinger over FTP.
+# Runs on every push to `main` (including when you merge a Pull Request into main).
+# Manual run: GitHub repo → Actions → "Deploy to Hostinger" → Run workflow.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   HOSTINGER_FTP_HOST   — e.g. ftp.yourdomain.com (no ftp:// prefix)
+#   HOSTINGER_FTP_USER   — FTP username from Hostinger hPanel
+#   HOSTINGER_FTP_PASSWORD
+#
+# Deploy target: public_html/flagoji/ (site URL: https://yourdomain.com/flagoji/)
+
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install & build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload site (FTP)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.HOSTINGER_FTP_HOST }}
+          username: ${{ secrets.HOSTINGER_FTP_USER }}
+          password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
+          server-dir: public_html/flagoji/
+          local-dir: ./
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/src/**
+            **/.github/**
+            **/.cursor/**
+            package.json
+            package-lock.json
+            scripts/**
+            **/*.md
+            .gitignore
+            **/.env
+            **/.env.*
+            lighthouse-report.json
+          # Set to true if you want the server folder to exactly match the repo (deletes remote files you removed).
+          dangerous-clean-slate: false

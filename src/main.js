@@ -1,5 +1,3 @@
-import { processGifFramePixels } from './gif-export-frame.js';
-
 function minDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -969,6 +967,7 @@ async function processGifFrameForExport(imageData, width, height, quantizeOpts) 
       }
     }
   }
+  const { processGifFramePixels } = await import('./gif-export-frame.js');
   return processGifFramePixels(pixels, width, height, quantizeOpts);
 }
 

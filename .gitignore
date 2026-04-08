@@ -7,3 +7,5 @@ node_modules/
 *.mov
 *.zip
 *.tar.gz
+lighthouse-report.json
+*.report.html
