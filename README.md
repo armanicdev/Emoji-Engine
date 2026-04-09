@@ -1,54 +1,46 @@
 # Flagoji
 
-Client-side tool: upload flag artwork as **SVG, PNG, JPG, or WebP**, get emoji-style PNGs per platform (Apple, Google, Samsung, Twitter, WhatsApp, Huawei). Rasters are cropped to a 3:2 frame (cover). Optional motion preview and GIF export.
+Static site: **HTML + CSS + JavaScript (ES modules)**. There is **no build step** — that matches how the web has worked for years. Upload the folder to any host; use **HTTPS** and a normal document root.
 
-Run **`npm run build`** before deploy (minified JS/CSS). For local preview, use any static server (e.g. `npx serve .`) so module paths resolve.
+**Local preview:** Browsers block `type="module"` from `file://`, so use any static server from the project folder, for example:
+- **Python:** `python3 -m http.server 8080` → **http://localhost:8080**
+- **One-off (Node not required in the repo):** `npx --yes serve . -l 4173` → **http://localhost:4173**
 
-## Deploy from GitHub → Hostinger (automatic)
+There is **no `package.json`** — nothing to install for production or for Hostinger.
 
-The workflow [`.github/workflows/deploy-hostinger.yml`](.github/workflows/deploy-hostinger.yml) **builds on GitHub** and **uploads over FTP** whenever you **push to `main`** (including **merging a Pull Request** into `main`). You do not run `npm` on Hostinger.
+## Deploy to Hostinger
 
-1. Push this repo to GitHub (default branch should be `main` or `master`).
-2. In **Hostinger hPanel** → **Files** → **FTP Accounts** (or **Advanced** → **FTP**), copy the **FTP host**, **username**, and **password**. Use whatever host hPanel shows (it may **not** be `flagoji.armanic.studio` — that’s normal). This project uploads to **`public_html/flagoji/`** on the server.
-3. **Your live URL:** If the subdomain **flagoji.armanic.studio** is pointed at that same folder in hPanel (**Domains** → subdomain → document root = `public_html/flagoji`), open **`https://flagoji.armanic.studio/`**. If Flagoji is only a **subfolder** on the main domain instead, use **`https://armanic.studio/flagoji/`**.
-4. In GitHub: **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
-   - `HOSTINGER_FTP_HOST` — hostname only from hPanel (no `ftp://`)
-   - `HOSTINGER_FTP_USER`
-   - `HOSTINGER_FTP_PASSWORD`
-5. Commit and push the workflow file; or open **Actions** → **Deploy to Hostinger** → **Run workflow** to test.
+**Manual:** Upload **`index.html`**, **`.htaccess`**, **`src/`**, **`assets/`** into **`public_html/flagoji/`**.  
+If you previously used **`dist/`**, **delete that folder on the server** so the browser doesn’t load old bundles.
 
-If your FTP home is already **`public_html`**, the workflow uses **`public_html/flagoji/`** as `server-dir` (path relative to FTP root). If your host nests differently, edit `server-dir` in the workflow file.
+**GitHub Actions:** [`.github/workflows/deploy-hostinger.yml`](.github/workflows/deploy-hostinger.yml) FTP-uploads the repo **without** Node (no `npm run build`). Set secrets: `HOSTINGER_FTP_HOST`, `HOSTINGER_FTP_USER`, `HOSTINGER_FTP_PASSWORD`.
 
-**More “platform” style (optional):** Connect the same repo to [Vercel](https://vercel.com), [Netlify](https://www.netlify.com), or [Cloudflare Pages](https://pages.cloudflare.com) — they build on every push/PR with almost no FTP setup.
-
-## What it does
-
-- Normalizes SVG to a 3:2 frame; rasters use **cover** (center crop) into the same frame. Then masks with rounded corners and applies platform-specific wave and lighting in canvas.
-- **Motion**: animates the wave; downloads become GIF when motion is on, PNG when off.
-- **Smoothing**: toggles canvas image smoothing (preview and export).
-- **Per-platform sliders**: wave, stroke, shadow, gloss, and related parameters per style.
+Live URL (typical): **https://flagoji.armanic.studio/** when the subdomain points at that folder.
 
 ## Layout
 
 | Path | Role |
 |------|------|
 | `index.html` | App shell |
-| `src/main.js` | SVG load, warp engine, cache, GIF export, haptics |
-| `src/gif-export-*.js` | GIF frame pipeline + worker |
-| `assets/styles.css` | Source styles (edit this) |
-| `assets/styles.min.css` | Built CSS (`npm run build`) |
-| `assets/fonts/` | Self-hosted Ranade + Archivo |
-| `assets/vendor/` | Lenis (self-hosted) |
-| `assets/images/` | Footer art, logo |
-| `dist/` | Bundled/minified JS (`npm run build`) |
-| `scripts/build.mjs` | esbuild entry |
+| `assets/styles.css` | All styles |
+| `src/main.js` | App entry (`type="module"`) |
+| `src/gif-export-frame.js` | GIF quantization (loads `gifenc` from CDN when needed) |
+| `src/gif-export-worker.js` | Web Worker for GIF frames |
+| `assets/fonts/` | Fonts |
+| `assets/vendor/lenis.min.js` | Lenis |
+| `assets/images/` | Images |
+| `.htaccess` | Cache + compression hints (Apache/LiteSpeed) |
+
+## About “0/100” performance scores
+
+Cheap **shared hosting** often has slow **TTFB**; Lighthouse **mobile + throttling** punishes that. **Minifying** or a **`dist/`** folder does not fix server latency. Your stack can be fine and still score low on Hostinger’s tool — compare with [PageSpeed Insights](https://pagespeed.web.dev/) for another data point.
 
 ## Dependencies
 
-- [Lenis](https://github.com/darkroomengineering/lenis) — vendored in `assets/vendor/` (scroll smoothing)  
-- [gifenc](https://github.com/mattdesl/gifenc) — loaded from npm CDN when exporting GIFs  
-- Optional: `web-haptics` (dynamic import) with `navigator.vibrate` fallback  
+- **Browser** loads [gifenc](https://github.com/mattdesl/gifenc) from a CDN when you export a GIF.  
+- Optional: **web-haptics** (dynamic import) with `navigator.vibrate` fallback.
 
-## Performance notes
+## What it does
 
-Static flag layers are cached per variant; slider changes re-render only the touched variant. Wave math along X is hoisted into a buffer before the per-pixel Y pass.
+- Normalizes SVG to a 3:2 frame; rasters use **cover** into the same frame, then platform-specific canvas styling.
+- **Motion** / **GIF export**, **smoothing**, per-platform sliders.

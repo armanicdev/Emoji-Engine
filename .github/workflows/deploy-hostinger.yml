@@ -1,14 +1,5 @@
-# Build the static site and upload to Hostinger over FTP.
-# Runs on every push to `main` (including when you merge a Pull Request into main).
-# Manual run: GitHub repo → Actions → "Deploy to Hostinger" → Run workflow.
-#
-# Required repository secrets (Settings → Secrets and variables → Actions):
-#   HOSTINGER_FTP_HOST   — copy from hPanel (often not the same as the public domain; no ftp:// prefix)
-#   HOSTINGER_FTP_USER   — FTP username from Hostinger hPanel
-#   HOSTINGER_FTP_PASSWORD
-#
-# Deploy target: public_html/flagoji/
-# Public URL is usually https://flagoji.armanic.studio/ if that subdomain’s document root is this folder.
+# Upload static files to Hostinger over FTP (no Node — no build).
+# Runs on every push to `main` / `master` (including PR merges).
 
 name: Deploy to Hostinger
 
@@ -27,17 +18,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install & build
-        run: |
-          npm ci
-          npm run build
-
       - name: Upload site (FTP)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.6
         with:
@@ -50,9 +30,9 @@ jobs:
             **/.git*
             **/.git*/**
             **/node_modules/**
-            **/src/**
             **/.github/**
             **/.cursor/**
+            **/dist/**
             package.json
             package-lock.json
             scripts/**
@@ -61,5 +41,4 @@ jobs:
             **/.env
             **/.env.*
             lighthouse-report.json
-          # Set to true if you want the server folder to exactly match the repo (deletes remote files you removed).
           dangerous-clean-slate: false

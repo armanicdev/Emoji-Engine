@@ -198,7 +198,7 @@
     .flowers-bottom__brand {
       position: absolute;
       left: 50%;
-      bottom: clamp(10px, 3vw, 20px);
+      bottom: calc(clamp(10px, 3vw, 20px) + 10px);
       translate: -50% 0;
       line-height: 0;
       max-width: calc(100% - 24px);
@@ -288,6 +288,14 @@
       width: 8px;
       height: 8px;
       stroke-width: 2.5;
+    }
+
+    /* Hide custom cursor trailer on touch/mobile devices. */
+    @media (hover: none),
+    (pointer: coarse) {
+      #trailer {
+        display: none !important;
+      }
     }
 
     .shell {

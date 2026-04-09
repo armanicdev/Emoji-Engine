@@ -9,3 +9,5 @@ node_modules/
 *.tar.gz
 lighthouse-report.json
 *.report.html
+dist/
+assets/styles.min.css

@@ -1071,6 +1071,7 @@ async function downloadGif(variant) {
 const trailer = document.getElementById("trailer");
 const trailerIcon = document.getElementById("trailer-icon");
 let currentHoverType = "";
+const supportsCursorTrailer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
 const animateTrailer = (e, interacting) => {
   // Offset by 12px so it acts like a "petal" to the bottom-right of the real cursor
@@ -1098,19 +1099,25 @@ const getTrailerIcon = type => {
   }
 };
 
-window.addEventListener("mousemove", e => {
-  const interactable = e.target.closest(".interactable");
-  const interacting = interactable !== null;
-  animateTrailer(e, interacting);
+if (!supportsCursorTrailer && trailer) {
+  trailer.style.display = 'none';
+}
 
-  const newType = interacting ? interactable.dataset.type : "";
+if (supportsCursorTrailer && trailer && trailerIcon) {
+  window.addEventListener("mousemove", e => {
+    const interactable = e.target.closest(".interactable");
+    const interacting = interactable !== null;
+    animateTrailer(e, interacting);
 
-  if (newType !== currentHoverType) {
-    currentHoverType = newType;
-    trailer.dataset.type = newType;
-    if (interacting) {
-      trailerIcon.innerHTML = getTrailerIcon(newType);
+    const newType = interacting ? interactable.dataset.type : "";
+
+    if (newType !== currentHoverType) {
+      currentHoverType = newType;
+      trailer.dataset.type = newType;
+      if (interacting) {
+        trailerIcon.innerHTML = getTrailerIcon(newType);
+      }
     }
-  }
-});
+  });
+}
 
