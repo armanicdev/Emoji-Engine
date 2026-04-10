@@ -379,6 +379,20 @@
       stroke-width: 2.5;
     }
 
+    /* ON/OFF as SVG text so browser “minimum font size” cannot blow up HTML text inside the 20×20 trailer */
+    #trailer-icon svg.trailer-toggle-svg {
+      /* ~80% of the 20px trailer width so ON/OFF stays readable (SVG avoids min-font-size inflation) */
+      width: 16px;
+      height: auto;
+      flex-shrink: 0;
+    }
+
+    #trailer-icon svg.trailer-toggle-svg .trailer-toggle-svg__text {
+      font-family: var(--font-display);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
     /* Hide custom cursor trailer on touch/mobile devices. */
     @media (hover: none),
     (pointer: coarse) {
@@ -490,16 +504,74 @@
 
     .output-controls {
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--space-3);
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--space-4);
       padding-bottom: 14px;
       border-bottom: 1px solid var(--hairline);
       margin-bottom: var(--space-5);
     }
 
+    .output-controls__row--wide {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .output-controls__option-row {
+      width: 100%;
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      min-width: 0;
+    }
+
+    .output-controls__option-label {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .output-controls__option-btns {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--space-2);
+      flex-shrink: 0;
+    }
+
+    .output-controls__option-btns--toggles {
+      gap: var(--space-3);
+    }
+
+    .aa-toggle,
+    .fit-toggle {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.35em;
+    }
+
+    .toggle-option-state {
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      opacity: 0.55;
+    }
+
+    .aa-toggle.active .toggle-option-state,
+    .fit-toggle.active .toggle-option-state {
+      opacity: 0.85;
+    }
+
     .scale-btn,
-    .aa-toggle {
+    .gif-speed-btn,
+    .aa-toggle,
+    .fit-toggle {
       background: none;
       border: none;
       padding: 0;
@@ -514,17 +586,41 @@
       transition: color 0.15s ease, opacity 0.15s ease;
     }
 
+    .scale-btn,
+    .gif-speed-btn {
+      opacity: 0.5;
+    }
+
     .scale-btn:hover,
-    .aa-toggle:hover {
+    .scale-btn:focus-visible,
+    .gif-speed-btn:hover,
+    .gif-speed-btn:focus-visible {
+      opacity: 0.85;
       color: var(--ink);
     }
 
-    .scale-btn.active {
+    .scale-btn.active,
+    .gif-speed-btn.active {
+      color: var(--ink);
+      opacity: 1;
+    }
+
+    .scale-btn.active:hover,
+    .scale-btn.active:focus-visible,
+    .gif-speed-btn.active:hover,
+    .gif-speed-btn.active:focus-visible {
+      opacity: 1;
+    }
+
+    .aa-toggle:hover,
+    .fit-toggle:hover {
       color: var(--ink);
     }
 
     .scale-btn:focus-visible,
-    .aa-toggle:focus-visible {
+    .gif-speed-btn:focus-visible,
+    .aa-toggle:focus-visible,
+    .fit-toggle:focus-visible {
       outline: var(--focus-ring);
       outline-offset: var(--focus-offset);
       border-radius: var(--radius-sm);
@@ -536,11 +632,13 @@
       background-color: var(--hairline);
     }
 
-    .aa-toggle {
+    .aa-toggle,
+    .fit-toggle {
       opacity: 0.5;
     }
 
-    .aa-toggle.active {
+    .aa-toggle.active,
+    .fit-toggle.active {
       opacity: 1;
     }
 

@@ -1,3 +1,5 @@
+import { createPhysicsFlagRenderer } from './flag-physics-webgl.js';
+
 function minDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -75,6 +77,60 @@ const scheduleLenis =
 scheduleLenis(startLenisWhenIdle);
 
 let currentImg = null;
+
+/** Normalized flag bitmap size (must match renderVariant FLAG_W / FLAG_H at scale 1). */
+const SOURCE_FLAG_W = 420;
+const SOURCE_FLAG_H = 280;
+
+const RASTER_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+/** Last raster `Image` (for cover vs stretch); null when current artwork is SVG. */
+let rasterSourceImage = null;
+/** Last SVG source string; null when current artwork is raster. */
+let storedSvgString = null;
+/** When true, artwork is stretched to fill the 3:2 frame (may distort). When false, use cover / slice. */
+let isStretchFit = false;
+let isAntiAliased = true;
+
+/** Bitmap/canvas width & height (`naturalWidth` is 0 on `HTMLCanvasElement` in some paths). */
+function getDrawableSize(img) {
+  const nw = img.naturalWidth || img.width;
+  const nh = img.naturalHeight || img.height;
+  return { nw, nh };
+}
+
+/**
+ * Draw any `CanvasImageSource` into a 420×280 canvas: stretch (Fit) or cover/crop (!Fit).
+ */
+function drawRasterToSourceCanvas(img) {
+  const { nw, nh } = getDrawableSize(img);
+  if (!nw || !nh) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = SOURCE_FLAG_W;
+  canvas.height = SOURCE_FLAG_H;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = isAntiAliased;
+  if (isStretchFit) {
+    ctx.drawImage(img, 0, 0, nw, nh, 0, 0, SOURCE_FLAG_W, SOURCE_FLAG_H);
+  } else {
+    const scale = Math.max(SOURCE_FLAG_W / nw, SOURCE_FLAG_H / nh);
+    const dw = nw * scale;
+    const dh = nh * scale;
+    const dx = (SOURCE_FLAG_W - dw) / 2;
+    const dy = (SOURCE_FLAG_H - dh) / 2;
+    ctx.drawImage(img, 0, 0, nw, nh, dx, dy, dw, dh);
+  }
+  return canvas;
+}
+
+function parseSvgPositiveNumber(attr, fallback) {
+  if (attr == null || attr === '') return fallback;
+  const s = String(attr).trim();
+  if (s.includes('%')) return fallback;
+  const v = parseFloat(s);
+  return Number.isFinite(v) && v > 0 ? v : fallback;
+}
+
 let isAnimated = false;
 let animationPhaseOffset = 0;
 let lastAnimTime = 0;
@@ -287,17 +343,74 @@ const STYLE_PRESETS = {
     shadowY: 6,
     shadowOpacity: 0.3,
     glossOpacity: 0.3 // Softer top highlight
+  },
+  circle1x1: {
+    waveAmplitude: 0,
+    waveFrequency: 1,
+    wavePhase: 0,
+    lightIntensity: 0,
+    cornerRadius: 0,
+    strokeWidth: 0,
+    innerStrokeOpacity: 0,
+    strokeOpacity: 0,
+    shadowBlur: 8,
+    shadowY: 4,
+    shadowOpacity: 0.22,
+    glossOpacity: 0
+  },
+  rounded1x1: {
+    waveAmplitude: 0,
+    waveFrequency: 1,
+    wavePhase: 0,
+    lightIntensity: 0,
+    cornerRadius: 40,
+    strokeWidth: 0,
+    innerStrokeOpacity: 0,
+    strokeOpacity: 0,
+    shadowBlur: 8,
+    shadowY: 4,
+    shadowOpacity: 0.22,
+    glossOpacity: 0
+  },
+  physicsWave: {
+    waveAmplitude: 17,
+    waveFrequency: 1.05,
+    wavePhase: 0,
+    secondaryRipple: 1.38,
+    lightIntensity: 58,
+    specularSharpness: 20,
+    cornerRadius: 0,
+    strokeWidth: 0,
+    innerStrokeOpacity: 0,
+    strokeOpacity: 0,
+    shadowBlur: 0,
+    shadowY: 0,
+    shadowOpacity: 0,
+    glossOpacity: 0
   }
 };
 
-const PARAM_VARIANT_ORDER = ['apple', 'twitter', 'samsung', 'google', 'huawei', 'whatsapp'];
+const PARAM_VARIANT_ORDER = [
+  'apple',
+  'twitter',
+  'samsung',
+  'google',
+  'huawei',
+  'whatsapp',
+  'circle1x1',
+  'rounded1x1',
+  'physicsWave'
+];
 const PARAM_VARIANT_LABEL = {
   apple: 'Apple',
   twitter: 'Twitter',
   samsung: 'Samsung',
   google: 'Google',
   huawei: 'Huawei',
-  whatsapp: 'WhatsApp'
+  whatsapp: 'WhatsApp',
+  circle1x1: 'Circle 1:1',
+  rounded1x1: 'Rounded 1:1',
+  physicsWave: 'Physics'
 };
 
 /** UI labels for preset keys (camelCase → sentence case). */
@@ -313,7 +426,9 @@ const PARAM_KEY_LABEL = {
   shadowBlur: 'Shadow blur',
   shadowY: 'Shadow offset Y',
   shadowOpacity: 'Shadow opacity',
-  glossOpacity: 'Gloss opacity'
+  glossOpacity: 'Gloss opacity',
+  secondaryRipple: 'Ripple along fly',
+  specularSharpness: 'Specular sharpness'
 };
 
 initHaptics();
@@ -374,12 +489,6 @@ const defaultSvg = `<svg width="200" height="132" viewBox="0 0 200 132" fill="no
 </svg>`;
 processSvg(defaultSvg);
 
-/** Normalized flag bitmap size (must match renderVariant FLAG_W / FLAG_H at scale 1). */
-const SOURCE_FLAG_W = 420;
-const SOURCE_FLAG_H = 280;
-
-const RASTER_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-
 function isSvgFile(file) {
   const t = (file.type || '').toLowerCase();
   if (t === 'image/svg+xml') return true;
@@ -408,8 +517,7 @@ function handleFile(file) {
 }
 
 /**
- * Raster images are scaled with object-fit: cover into SOURCE_FLAG_W×SOURCE_FLAG_H,
- * then the existing warp path treats the result like SVG output.
+ * Raster images: cover (crop) or stretch into SOURCE_FLAG_W×SOURCE_FLAG_H based on `isStretchFit`.
  */
 function processRasterFile(file) {
   const url = URL.createObjectURL(file);
@@ -421,17 +529,12 @@ function processRasterFile(file) {
     if (!nw || !nh) {
       return showError('Could not read image dimensions.');
     }
-    const canvas = document.createElement('canvas');
-    canvas.width = SOURCE_FLAG_W;
-    canvas.height = SOURCE_FLAG_H;
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = isAntiAliased;
-    const scale = Math.max(SOURCE_FLAG_W / nw, SOURCE_FLAG_H / nh);
-    const dw = nw * scale;
-    const dh = nh * scale;
-    const dx = (SOURCE_FLAG_W - dw) / 2;
-    const dy = (SOURCE_FLAG_H - dh) / 2;
-    ctx.drawImage(img, 0, 0, nw, nh, dx, dy, dw, dh);
+    rasterSourceImage = img;
+    storedSvgString = null;
+    const canvas = drawRasterToSourceCanvas(img);
+    if (!canvas) {
+      return showError('Could not read image dimensions.');
+    }
     currentImg = canvas;
     clearCaches();
     generateVariants();
@@ -453,16 +556,23 @@ function processSvg(svgString) {
     return showError('Invalid SVG format.');
   }
 
+  storedSvgString = svgString;
+  rasterSourceImage = null;
+
   // Sanitize: remove scripts and foreignObjects
   const dangerous = root.querySelectorAll('script, foreignObject');
   dangerous.forEach(el => el.remove());
 
-  // Force 3:2 aspect ratio for consistent rendering
-  root.setAttribute('width', '420');
-  root.setAttribute('height', '280');
-  if (!root.hasAttribute('preserveAspectRatio')) {
-    root.setAttribute('preserveAspectRatio', 'none');
+  // Map SVG user space → 420×280 viewport. Without viewBox, browsers guess and often letterbox/crop wrong.
+  if (!root.getAttribute('viewBox')?.trim()) {
+    const w0 = parseSvgPositiveNumber(root.getAttribute('width'), SOURCE_FLAG_W);
+    const h0 = parseSvgPositiveNumber(root.getAttribute('height'), SOURCE_FLAG_H);
+    root.setAttribute('viewBox', `0 0 ${w0} ${h0}`);
   }
+
+  root.setAttribute('width', String(SOURCE_FLAG_W));
+  root.setAttribute('height', String(SOURCE_FLAG_H));
+  root.setAttribute('preserveAspectRatio', isStretchFit ? 'none' : 'xMidYMid slice');
 
   const serializer = new XMLSerializer();
   const str = serializer.serializeToString(root);
@@ -471,13 +581,19 @@ function processSvg(svgString) {
 
   const img = new Image();
   img.onload = () => {
-    currentImg = img;
+    URL.revokeObjectURL(url);
+    const canvas = drawRasterToSourceCanvas(img);
+    if (!canvas) {
+      showError('Could not rasterize SVG.');
+      return;
+    }
+    currentImg = canvas;
     clearCaches();
     generateVariants();
     triggerHaptic('success', { intensity: 0.36 });
-    URL.revokeObjectURL(url);
   };
   img.onerror = () => {
+    URL.revokeObjectURL(url);
     showError('Failed to load SVG into Canvas.');
   };
   img.src = url;
@@ -529,7 +645,7 @@ function initSliders() {
           min = -1;
           max = 1;
         }
-      } else if (['cornerRadius', 'waveAmplitude', 'lightIntensity', 'shadowBlur', 'shadowY', 'strokeWidth'].includes(key)) {
+      } else if (['cornerRadius', 'waveAmplitude', 'lightIntensity', 'shadowBlur', 'shadowY', 'strokeWidth', 'specularSharpness'].includes(key)) {
         step = 1;
         if (value === 0) {
           min = -20;
@@ -602,7 +718,17 @@ function initSliders() {
 // Global caches for the animation engine
 const variantCaches = {};
 let currentScale = 1;
-let isAntiAliased = true;
+
+function refreshSourceBitmapAfterRasterOrAaChange() {
+  if (rasterSourceImage) {
+    const canvas = drawRasterToSourceCanvas(rasterSourceImage);
+    if (canvas) {
+      currentImg = canvas;
+      clearCaches();
+      if (currentImg) generateVariants();
+    }
+  }
+}
 
 // rAF-based render scheduler: batches slider input into one frame, renders only the changed variant
 let _pendingVariant = null;
@@ -623,7 +749,13 @@ function scheduleVariantRender(variant) {
 }
 
 function clearCaches() {
-  Object.keys(variantCaches).forEach(k => delete variantCaches[k]);
+  Object.keys(variantCaches).forEach((k) => {
+    const entry = variantCaches[k];
+    if (entry && typeof entry.disposePhysics === 'function') {
+      entry.disposePhysics();
+    }
+    delete variantCaches[k];
+  });
 }
 
 // Initialize scale and AA controls
@@ -642,18 +774,69 @@ document.querySelectorAll('.scale-btn').forEach(btn => {
   });
 });
 
+/** Base delay per GIF frame at 1× export speed (ms). Higher export speeds shorten delay. */
+const GIF_EXPORT_BASE_DELAY_MS = 58;
+
+function getGifExportSpeedMultiplier() {
+  const active = document.querySelector('.gif-speed-btn.active');
+  const raw = active && active.dataset.gifSpeed;
+  const v = raw == null ? 1 : parseFloat(raw);
+  return Number.isFinite(v) && v > 0 ? v : 1;
+}
+
+document.querySelectorAll('.gif-speed-btn').forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    const target = e.currentTarget;
+    document.querySelectorAll('.gif-speed-btn').forEach((b) => {
+      b.classList.remove('active');
+      b.setAttribute('aria-checked', 'false');
+    });
+    target.classList.add('active');
+    target.setAttribute('aria-checked', 'true');
+  });
+});
+
+function syncOutputToggleStateLabels() {
+  const aaEl = document.getElementById('aaToggleState');
+  const fitEl = document.getElementById('fitToggleState');
+  if (aaEl) aaEl.textContent = isAntiAliased ? 'ON' : 'OFF';
+  if (fitEl) fitEl.textContent = isStretchFit ? 'ON' : 'OFF';
+}
+
 const aaToggle = document.getElementById('aaToggle');
 if (aaToggle) {
   aaToggle.addEventListener('click', () => {
     isAntiAliased = !isAntiAliased;
     aaToggle.classList.toggle('active', isAntiAliased);
     aaToggle.setAttribute('aria-pressed', String(isAntiAliased));
-    clearCaches();
-    if (currentImg) generateVariants();
+    syncOutputToggleStateLabels();
+    if (rasterSourceImage) {
+      refreshSourceBitmapAfterRasterOrAaChange();
+    } else {
+      clearCaches();
+      if (currentImg) generateVariants();
+    }
 
-    // Update trailer text immediately if currently hovering
     if (currentHoverType === 'aa') {
       trailerIcon.innerHTML = getTrailerIcon('aa');
+    }
+  });
+}
+
+const fitToggle = document.getElementById('fitToggle');
+if (fitToggle) {
+  fitToggle.addEventListener('click', () => {
+    isStretchFit = !isStretchFit;
+    fitToggle.classList.toggle('active', isStretchFit);
+    fitToggle.setAttribute('aria-pressed', String(isStretchFit));
+    syncOutputToggleStateLabels();
+    if (rasterSourceImage) {
+      refreshSourceBitmapAfterRasterOrAaChange();
+    } else if (storedSvgString) {
+      processSvg(storedSvgString);
+    }
+    if (currentHoverType === 'fit') {
+      trailerIcon.innerHTML = getTrailerIcon('fit');
     }
   });
 }
@@ -670,6 +853,30 @@ function generateVariants() {
   previewsContainer.removeAttribute('hidden');
   if (outputPlaceholder) outputPlaceholder.setAttribute('hidden', '');
   tuningPanel.removeAttribute('hidden');
+  syncOutputToggleStateLabels();
+}
+
+function compositePreviewToDom(variant, warpCanvas, opts, preset, W, H, pShadowBlur, pShadowY) {
+  const finalCanvas = opts.targetCanvas ?? document.getElementById(`preview-${variant}`);
+  if (!finalCanvas) return;
+  finalCanvas.width = 256 * currentScale;
+  finalCanvas.height = 256 * currentScale;
+  const fCtx = finalCanvas.getContext('2d');
+  fCtx.imageSmoothingEnabled = isAntiAliased;
+  fCtx.clearRect(0, 0, finalCanvas.width, finalCanvas.height);
+  const drawWarp = () => {
+    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, finalCanvas.width, finalCanvas.height);
+  };
+  if (!opts.omitShadow && preset.shadowOpacity > 0) {
+    fCtx.save();
+    fCtx.shadowColor = `rgba(0,0,0,${preset.shadowOpacity})`;
+    fCtx.shadowBlur = pShadowBlur;
+    fCtx.shadowOffsetY = pShadowY;
+    drawWarp();
+    fCtx.restore();
+  } else {
+    drawWarp();
+  }
 }
 
 function renderVariant(variant, img, opts = {}) {
@@ -687,6 +894,124 @@ function renderVariant(variant, img, opts = {}) {
   const pShadowY = preset.shadowY * currentScale;
   const pWaveAmp = preset.waveAmplitude * currentScale;
 
+  /** Square cover of the 420×280 flag bitmap, centered horizontally; clip circle or rounded square (1:1). */
+  if (variant === 'circle1x1' || variant === 'rounded1x1') {
+    let c = variantCaches[variant];
+    if (!c || c.kind !== 'mask1x1' || c.W !== W) {
+      const warpCanvas = document.createElement('canvas');
+      warpCanvas.width = W;
+      warpCanvas.height = H;
+      variantCaches[variant] = { kind: 'mask1x1', warpCanvas, W };
+      c = variantCaches[variant];
+    }
+    const warpCanvas = c.warpCanvas;
+    const wCtx = warpCanvas.getContext('2d', { willReadFrequently: true });
+    wCtx.clearRect(0, 0, W, H);
+    wCtx.imageSmoothingEnabled = isAntiAliased;
+
+    const S = Math.min(FLAG_W, FLAG_H);
+    const sqX = FLAG_X + (FLAG_W - S) / 2;
+    const sqY = FLAG_Y;
+    const srcS = Math.min(SOURCE_FLAG_W, SOURCE_FLAG_H);
+    const srcX = (SOURCE_FLAG_W - srcS) / 2;
+
+    wCtx.save();
+    wCtx.beginPath();
+    if (variant === 'circle1x1') {
+      wCtx.arc(sqX + S / 2, sqY + S / 2, S / 2, 0, Math.PI * 2);
+    } else {
+      const rawR = preset.cornerRadius * currentScale;
+      const r = Math.min(Math.max(rawR, 0), S * 0.48);
+      wCtx.roundRect(sqX, sqY, S, S, r);
+    }
+    wCtx.clip();
+    const { nw: srcW, nh: srcH } = getDrawableSize(img);
+    if (srcW > 0 && srcH > 0) {
+      wCtx.drawImage(img, srcX, 0, srcS, srcS, sqX, sqY, S, S);
+    } else {
+      wCtx.drawImage(img, sqX, sqY, S, S);
+    }
+    wCtx.restore();
+
+    compositePreviewToDom(variant, warpCanvas, opts, preset, W, H, pShadowBlur, pShadowY);
+    return;
+  }
+
+  if (variant === 'physicsWave') {
+    const existing = variantCaches[variant];
+    if (existing && existing.kind === 'physics' && existing.W !== W) {
+      if (typeof existing.disposePhysics === 'function') existing.disposePhysics();
+      delete variantCaches[variant];
+    }
+
+    if (!variantCaches[variant]) {
+      const pRadiusPhys = preset.cornerRadius * currentScale;
+      const pStrokePhys = preset.strokeWidth * currentScale;
+
+      const srcCanvas = document.createElement('canvas');
+      srcCanvas.width = W;
+      srcCanvas.height = H;
+      const sCtx = srcCanvas.getContext('2d', { willReadFrequently: true });
+      sCtx.imageSmoothingEnabled = isAntiAliased;
+      sCtx.beginPath();
+      sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, pRadiusPhys);
+      sCtx.closePath();
+      sCtx.save();
+      sCtx.clip();
+      const { nw: srcW2, nh: srcH2 } = getDrawableSize(img);
+      if (srcW2 > 0 && srcH2 > 0) {
+        sCtx.drawImage(img, 0, 0, srcW2, srcH2, FLAG_X, FLAG_Y, FLAG_W, FLAG_H);
+      } else {
+        sCtx.drawImage(img, FLAG_X, FLAG_Y, FLAG_W, FLAG_H);
+      }
+      sCtx.restore();
+      if (preset.innerStrokeOpacity > 0 || preset.strokeOpacity > 0) {
+        const opacity = preset.innerStrokeOpacity || preset.strokeOpacity;
+        sCtx.save();
+        sCtx.beginPath();
+        sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, pRadiusPhys);
+        sCtx.lineWidth = pStrokePhys * 2;
+        sCtx.strokeStyle = `rgba(0,0,0,${opacity})`;
+        sCtx.clip();
+        sCtx.stroke();
+        sCtx.restore();
+      }
+
+      const warpCanvas = document.createElement('canvas');
+      warpCanvas.width = W;
+      warpCanvas.height = H;
+
+      const renderer = createPhysicsFlagRenderer(warpCanvas);
+      variantCaches[variant] = {
+        kind: 'physics',
+        srcCanvas,
+        warpCanvas,
+        renderer,
+        disposePhysics: () => renderer.dispose(),
+        W
+      };
+    }
+
+    const ph = variantCaches[variant];
+    const time = preset.wavePhase + animationPhaseOffset;
+    ph.renderer.render({
+      srcCanvas: ph.srcCanvas,
+      flagX: FLAG_X,
+      flagY: FLAG_Y,
+      flagW: FLAG_W,
+      flagH: FLAG_H,
+      canvasW: W,
+      canvasH: H,
+      preset,
+      time,
+      waveAmplitude: pWaveAmp,
+      gifSync: Boolean(opts.gifExport)
+    });
+
+    compositePreviewToDom(variant, ph.warpCanvas, opts, preset, W, H, pShadowBlur, pShadowY);
+    return;
+  }
+
   // 1. Static Cache Generation (run once per image/slider change)
   if (!variantCaches[variant]) {
     const srcCanvas = document.createElement('canvas');
@@ -700,10 +1025,15 @@ function renderVariant(variant, img, opts = {}) {
     sCtx.roundRect(FLAG_X, FLAG_Y, FLAG_W, FLAG_H, pRadius);
     sCtx.closePath();
 
-    // Clip and draw image
+    // Clip and draw image (full source → flag rect so Fit/normalized canvases are never cropped here)
     sCtx.save();
     sCtx.clip();
-    sCtx.drawImage(img, FLAG_X, FLAG_Y, FLAG_W, FLAG_H);
+    const { nw: srcW, nh: srcH } = getDrawableSize(img);
+    if (srcW > 0 && srcH > 0) {
+      sCtx.drawImage(img, 0, 0, srcW, srcH, FLAG_X, FLAG_Y, FLAG_W, FLAG_H);
+    } else {
+      sCtx.drawImage(img, FLAG_X, FLAG_Y, FLAG_W, FLAG_H);
+    }
     sCtx.restore();
 
     // Pre-warp Overlays (Gloss, Bevel, Inner Stroke)
@@ -887,28 +1217,7 @@ function renderVariant(variant, img, opts = {}) {
     wCtx.putImageData(destImgData, 0, 0);
   }
 
-  // 3. Final Canvas (Shadows, Downscale)
-  const finalCanvas = opts.targetCanvas ?? document.getElementById(`preview-${variant}`);
-  finalCanvas.width = 256 * currentScale;
-  finalCanvas.height = 256 * currentScale;
-  const fCtx = finalCanvas.getContext('2d');
-  fCtx.imageSmoothingEnabled = isAntiAliased;
-  fCtx.clearRect(0, 0, finalCanvas.width, finalCanvas.height);
-
-  const drawWarp = () => {
-    fCtx.drawImage(warpCanvas, 0, 0, W, H, 0, 0, finalCanvas.width, finalCanvas.height);
-  };
-
-  if (!opts.omitShadow && preset.shadowOpacity > 0) {
-    fCtx.save();
-    fCtx.shadowColor = `rgba(0,0,0,${preset.shadowOpacity})`;
-    fCtx.shadowBlur = pShadowBlur;
-    fCtx.shadowOffsetY = pShadowY;
-    drawWarp();
-    fCtx.restore();
-  } else {
-    drawWarp();
-  }
+  compositePreviewToDom(variant, warpCanvas, opts, preset, W, H, pShadowBlur, pShadowY);
 }
 
 let gifencModule = null;
@@ -1002,8 +1311,10 @@ async function downloadGif(variant) {
     const { GIFEncoder } = await loadGifenc();
 
     const GIF_SIZE = 256 * currentScale;
-    const TOTAL_FRAMES = 30;
-    const FRAME_DELAY = Math.round(1000 / 30);
+    /** Enough frames for smooth motion; phase uses (N-1) divisor so last frame meets first for a seamless loop. */
+    const TOTAL_FRAMES = 42;
+    const speedMul = getGifExportSpeedMultiplier();
+    const frameDelay = Math.max(2, Math.round(GIF_EXPORT_BASE_DELAY_MS / speedMul));
 
     const savedOffset = animationPhaseOffset;
     const wasAnimated = isAnimated;
@@ -1030,9 +1341,16 @@ async function downloadGif(variant) {
       useSqrt: true
     };
 
+    const twoPi = Math.PI * 2;
     for (let i = 0; i < TOTAL_FRAMES; i++) {
-      animationPhaseOffset = (i / TOTAL_FRAMES) * Math.PI * 2;
-      renderVariant(variant, currentImg, { targetCanvas: exportCanvas, omitShadow: true });
+      animationPhaseOffset =
+        TOTAL_FRAMES <= 1 ? 0 : (i / (TOTAL_FRAMES - 1)) * twoPi;
+      renderVariant(variant, currentImg, {
+        targetCanvas: exportCanvas,
+        omitShadow: true,
+        gifExport: true
+      });
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
       tempCtx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
       tempCtx.drawImage(exportCanvas, 0, 0);
@@ -1047,7 +1365,7 @@ async function downloadGif(variant) {
 
       const frameOpts = {
         palette,
-        delay: FRAME_DELAY,
+        delay: frameDelay,
         ...(i === 0 ? { repeat: 0 } : {})
       };
       if (transparentIndex >= 0) {
@@ -1056,9 +1374,7 @@ async function downloadGif(variant) {
       }
       gif.writeFrame(index, GIF_SIZE, GIF_SIZE, frameOpts);
 
-      if (i % 5 === 0) {
-        await new Promise(r => setTimeout(r, 0));
-      }
+      await new Promise((r) => setTimeout(r, 0));
     }
 
     gif.finish();
@@ -1094,12 +1410,18 @@ const trailerIcon = document.getElementById("trailer-icon");
 let currentHoverType = "";
 const supportsCursorTrailer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-const animateTrailer = (e, interacting) => {
+const animateTrailer = (e, interacting, hoverType) => {
   if (!trailer) return;
   // Offset by 12px so it acts like a "petal" to the bottom-right of the real cursor
   const x = e.clientX + 12;
   const y = e.clientY + 12;
-  const scale = interacting ? 3.5 : 1;
+  // Toggle labels (aa/fit) read huge at 3.5×; keep those targets a bit smaller
+  const scale =
+    interacting && (hoverType === 'aa' || hoverType === 'fit')
+      ? 2.35
+      : interacting
+        ? 3.5
+        : 1;
 
   trailer.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
 };
@@ -1114,8 +1436,14 @@ const getTrailerIcon = type => {
       return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
     case "refresh":
       return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`;
-    case "aa":
-      return `<span style="font-family: var(--font-display); font-weight: bold; font-size: 5px; text-transform: uppercase; letter-spacing: 0.05em;">${isAntiAliased ? 'on' : 'off'}</span>`;
+    case "aa": {
+      const t = isAntiAliased ? 'ON' : 'OFF';
+      return `<svg class="trailer-toggle-svg" viewBox="0 0 30 10" fill="currentColor" aria-hidden="true"><text class="trailer-toggle-svg__text" x="15" y="8" text-anchor="middle" font-size="8.25" font-weight="600">${t}</text></svg>`;
+    }
+    case "fit": {
+      const t = isStretchFit ? 'ON' : 'OFF';
+      return `<svg class="trailer-toggle-svg" viewBox="0 0 30 10" fill="currentColor" aria-hidden="true"><text class="trailer-toggle-svg__text" x="15" y="8" text-anchor="middle" font-size="8.25" font-weight="600">${t}</text></svg>`;
+    }
     default:
       return "";
   }
@@ -1129,9 +1457,10 @@ if (supportsCursorTrailer && trailer && trailerIcon) {
   window.addEventListener("mousemove", e => {
     const interactable = e.target.closest(".interactable");
     const interacting = interactable !== null;
-    animateTrailer(e, interacting);
+    const hoverType = interacting ? interactable.dataset.type ?? "" : "";
+    animateTrailer(e, interacting, hoverType);
 
-    const newType = interacting ? interactable.dataset.type : "";
+    const newType = hoverType;
 
     if (newType !== currentHoverType) {
       currentHoverType = newType;

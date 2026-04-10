@@ -12,14 +12,7 @@
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="dns-prefetch" href="https://esm.sh">
   <link rel="dns-prefetch" href="https://unpkg.com">
-  <!-- Preload critical fonts -->
-  <link rel="preload" href="assets/fonts/ranade-300.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="assets/fonts/archivo-600.woff2" as="font" type="font/woff2" crossorigin>
-  <!-- Async load non-critical CSS -->
-  <link rel="preload" href="assets/styles.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript>
-    <link rel="stylesheet" href="assets/styles.css">
-  </noscript>
+  <link rel="stylesheet" href="assets/styles.css">
 </head>
 
 <body class="app--booting" aria-busy="true">
@@ -61,14 +54,52 @@
 
         <section class="block-output" aria-labelledby="previews-heading">
           <h2 id="previews-heading" class="visually-hidden">Platform previews</h2>
-          <div class="output-controls" id="outputControls" role="radiogroup" aria-label="Export resolution" hidden>
-            <button type="button" class="scale-btn" role="radio" aria-checked="false" data-scale="0.5">0.5x</button>
-            <button type="button" class="scale-btn active" role="radio" aria-checked="true" data-scale="1">1x</button>
-            <button type="button" class="scale-btn" role="radio" aria-checked="false" data-scale="2">2x</button>
-            <button type="button" class="scale-btn" role="radio" aria-checked="false" data-scale="3">3x</button>
-            <div class="divider-vertical" aria-hidden="true"></div>
-            <button type="button" class="aa-toggle active interactable" data-type="aa" id="aaToggle" aria-pressed="true"
-              aria-label="Toggle canvas smoothing">Smoothing</button>
+          <div class="output-controls" id="outputControls" hidden>
+            <div class="output-controls__row output-controls__row--wide">
+              <div class="output-controls__option-row" role="radiogroup" aria-labelledby="export-size-label">
+                <span id="export-size-label" class="output-controls__option-label">Export size</span>
+                <div class="output-controls__option-btns">
+                  <button type="button" class="scale-btn" role="radio" aria-checked="false" data-scale="0.5"
+                    aria-label="Export at half resolution">0.5×</button>
+                  <button type="button" class="scale-btn active" role="radio" aria-checked="true" data-scale="1"
+                    aria-label="Export at 1× resolution">1×</button>
+                  <button type="button" class="scale-btn" role="radio" aria-checked="false" data-scale="2"
+                    aria-label="Export at 2× resolution">2×</button>
+                  <button type="button" class="scale-btn" role="radio" aria-checked="false" data-scale="3"
+                    aria-label="Export at 3× resolution">3×</button>
+                </div>
+              </div>
+            </div>
+            <div class="output-controls__row output-controls__row--wide">
+              <div class="output-controls__option-row" role="radiogroup" aria-labelledby="gif-speed-label">
+                <span id="gif-speed-label" class="output-controls__option-label">GIF speed</span>
+                <div class="output-controls__option-btns">
+                  <button type="button" class="gif-speed-btn active" role="radio" aria-checked="true" data-gif-speed="1"
+                    aria-label="GIF export at normal speed">1×</button>
+                  <button type="button" class="gif-speed-btn" role="radio" aria-checked="false" data-gif-speed="1.5"
+                    aria-label="GIF export one and a half times faster">1.5×</button>
+                  <button type="button" class="gif-speed-btn" role="radio" aria-checked="false" data-gif-speed="2"
+                    aria-label="GIF export twice as fast">2×</button>
+                </div>
+              </div>
+            </div>
+            <div class="output-controls__row output-controls__row--wide">
+              <div class="output-controls__option-row" aria-labelledby="other-options-label">
+                <span id="other-options-label" class="output-controls__option-label">Other options</span>
+                <div class="output-controls__option-btns output-controls__option-btns--toggles">
+                  <button type="button" class="aa-toggle active interactable" data-type="aa" id="aaToggle"
+                    aria-pressed="true" aria-label="Toggle canvas smoothing">
+                    <span class="toggle-option-name">Smoothing</span>
+                    <span class="toggle-option-state" id="aaToggleState" aria-hidden="true">ON</span>
+                  </button>
+                  <button type="button" class="fit-toggle interactable" data-type="fit" id="fitToggle"
+                    aria-pressed="false" aria-label="Stretch artwork to fill the entire flag frame">
+                    <span class="toggle-option-name">Fit</span>
+                    <span class="toggle-option-state" id="fitToggleState" aria-hidden="true">OFF</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
           <p class="empty-output" id="outputPlaceholder">Previews appear after you add artwork.</p>
           <div class="previews" id="previewsContainer" hidden>
@@ -161,6 +192,51 @@
               <canvas class="preview-canvas interactable" data-type="download" data-variant="whatsapp"
                 id="preview-whatsapp" width="256" height="256" role="img"
                 aria-label="WhatsApp style preview. Activate to download PNG or GIF."></canvas>
+            </article>
+            <article class="preview-card" id="card-circle1x1">
+              <button type="button" class="preview-header interactable" data-type="download" data-variant="circle1x1"
+                aria-label="Download circular 1:1 PNG or GIF">
+                <h3>Circle 1:1</h3>
+                <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </button>
+              <canvas class="preview-canvas interactable" data-type="download" data-variant="circle1x1"
+                id="preview-circle1x1" width="256" height="256" role="img"
+                aria-label="Circular 1:1 preview. Activate to download PNG or GIF."></canvas>
+            </article>
+            <article class="preview-card" id="card-rounded1x1">
+              <button type="button" class="preview-header interactable" data-type="download" data-variant="rounded1x1"
+                aria-label="Download rounded square 1:1 PNG or GIF">
+                <h3>Rounded 1:1</h3>
+                <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </button>
+              <canvas class="preview-canvas interactable" data-type="download" data-variant="rounded1x1"
+                id="preview-rounded1x1" width="256" height="256" role="img"
+                aria-label="Rounded square 1:1 preview. Activate to download PNG or GIF."></canvas>
+            </article>
+            <article class="preview-card" id="card-physicsWave">
+              <button type="button" class="preview-header interactable" data-type="download" data-variant="physicsWave"
+                aria-label="Download physics wave PNG or GIF">
+                <h3>Physics</h3>
+                <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </button>
+              <canvas class="preview-canvas interactable" data-type="download" data-variant="physicsWave"
+                id="preview-physicsWave" width="256" height="256" role="img"
+                aria-label="Physics wave preview. Activate to download PNG or GIF."></canvas>
             </article>
           </div>
         </section>
