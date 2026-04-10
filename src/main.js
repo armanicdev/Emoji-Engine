@@ -9,11 +9,6 @@ async function initAppShell() {
   const loading = document.getElementById('app-loading');
   const flowersImg = document.querySelector('.flowers-bottom__img');
 
-  const decodeFlowers =
-    flowersImg && typeof flowersImg.decode === 'function'
-      ? flowersImg.decode().catch(() => { })
-      : Promise.resolve();
-
   const fontsReady =
     document.fonts && typeof document.fonts.ready !== 'undefined'
       ? document.fonts.ready
@@ -24,9 +19,13 @@ async function initAppShell() {
   const MAX_LOAD_WAIT_MS = 3200;
 
   await Promise.race([
-    Promise.all([fontsReady.catch(() => { }), decodeFlowers]),
+    fontsReady.catch(() => { }),
     minDelay(MAX_LOAD_WAIT_MS)
   ]);
+
+  if (flowersImg && typeof flowersImg.decode === 'function') {
+    flowersImg.decode().catch(() => { });
+  }
 
   await minDelay(Math.max(0, MIN_VISIBLE_MS - (performance.now() - tBoot)));
 
@@ -52,21 +51,28 @@ async function initAppShell() {
 
 initAppShell();
 
-// Initialize Lenis for smooth scrolling
-const lenis = new Lenis({
-  duration: 0.8,
-  easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-  orientation: "vertical",
-  gestureOrientation: "vertical",
-  smoothWheel: true
-});
-
-function raf(time) {
-  lenis.raf(time);
+function startLenisWhenIdle() {
+  if (typeof window.Lenis === 'undefined') return;
+  const lenis = new Lenis({
+    duration: 0.8,
+    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+    orientation: 'vertical',
+    gestureOrientation: 'vertical',
+    smoothWheel: true
+  });
+  function raf(time) {
+    lenis.raf(time);
+    requestAnimationFrame(raf);
+  }
   requestAnimationFrame(raf);
 }
 
-requestAnimationFrame(raf);
+const scheduleLenis =
+  typeof requestIdleCallback === 'function'
+    ? (cb) => requestIdleCallback(cb, { timeout: 2000 })
+    : (cb) => setTimeout(cb, 1);
+
+scheduleLenis(startLenisWhenIdle);
 
 let currentImg = null;
 let isAnimated = false;
@@ -97,6 +103,11 @@ function toggleAnimation() {
 }
 window.toggleAnimation = toggleAnimation;
 
+const gifToggleBtn = document.getElementById('gifToggle');
+if (gifToggleBtn) {
+  gifToggleBtn.addEventListener('click', () => toggleAnimation());
+}
+
 function animateLoop(now) {
   if (!isAnimated) return;
   const dt = (now - lastAnimTime) / 1000;
@@ -112,7 +123,6 @@ const errorMsg = document.getElementById('errorMsg');
 const previewsContainer = document.getElementById('previewsContainer');
 const tuningPanel = document.getElementById('tuningPanel');
 const outputPlaceholder = document.getElementById('outputPlaceholder');
-const previewDownloadButtons = document.querySelectorAll('.preview-header, .preview-canvas');
 const hapticsState = {
   instance: null,
   ready: false,
@@ -311,7 +321,6 @@ initHaptics();
 dropZone.addEventListener('pointerdown', () => {
   triggerHaptic(HAPTIC_PRESETS.uploadPick, { intensity: 0.18 });
 });
-dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', (e) => {
   e.preventDefault();
   dropZone.classList.add('dragover');
@@ -326,18 +335,25 @@ dropZone.addEventListener('drop', (e) => {
 fileInput.addEventListener('change', (e) => {
   if (e.target.files.length) handleFile(e.target.files[0]);
 });
-previewDownloadButtons.forEach((button) => {
-  button.addEventListener('pointerdown', () => {
-    triggerHaptic(HAPTIC_PRESETS.download, { intensity: 0.38 });
-  });
+previewsContainer.addEventListener('pointerdown', (e) => {
+  const t = e.target.closest('[data-variant][data-type="download"]');
+  if (t) triggerHaptic(HAPTIC_PRESETS.download, { intensity: 0.38 });
+});
+previewsContainer.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-variant][data-type="download"]');
+  if (!t) return;
+  const variant = t.dataset.variant;
+  if (variant) downloadPng(variant);
 });
 
 function showError(msg) {
   errorMsg.textContent = msg;
-  errorMsg.style.display = 'block';
-  previewsContainer.style.display = 'none';
-  if (outputPlaceholder) outputPlaceholder.style.display = 'block';
-  tuningPanel.style.display = 'none';
+  errorMsg.removeAttribute('hidden');
+  previewsContainer.setAttribute('hidden', '');
+  const outputControls = document.getElementById('outputControls');
+  if (outputControls) outputControls.setAttribute('hidden', '');
+  if (outputPlaceholder) outputPlaceholder.removeAttribute('hidden');
+  tuningPanel.setAttribute('hidden', '');
   triggerHaptic('error', { intensity: 0.5 });
 }
 
@@ -377,7 +393,7 @@ function isRasterFile(file) {
 }
 
 function handleFile(file) {
-  errorMsg.style.display = 'none';
+  errorMsg.setAttribute('hidden', '');
   if (isSvgFile(file)) {
     const reader = new FileReader();
     reader.onload = (e) => processSvg(e.target.result);
@@ -613,9 +629,14 @@ function clearCaches() {
 // Initialize scale and AA controls
 document.querySelectorAll('.scale-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
-    document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    currentScale = parseFloat(e.target.dataset.scale);
+    const target = e.currentTarget;
+    document.querySelectorAll('.scale-btn').forEach((b) => {
+      b.classList.remove('active');
+      b.setAttribute('aria-checked', 'false');
+    });
+    target.classList.add('active');
+    target.setAttribute('aria-checked', 'true');
+    currentScale = parseFloat(target.dataset.scale);
     clearCaches();
     if (currentImg) generateVariants();
   });
@@ -645,10 +666,10 @@ function generateVariants() {
   });
 
   const outputControls = document.getElementById('outputControls');
-  if (outputControls) outputControls.style.display = 'flex';
-  previewsContainer.style.display = 'grid';
-  if (outputPlaceholder) outputPlaceholder.style.display = 'none';
-  tuningPanel.style.display = 'block';
+  if (outputControls) outputControls.removeAttribute('hidden');
+  previewsContainer.removeAttribute('hidden');
+  if (outputPlaceholder) outputPlaceholder.setAttribute('hidden', '');
+  tuningPanel.removeAttribute('hidden');
 }
 
 function renderVariant(variant, img, opts = {}) {
@@ -1074,6 +1095,7 @@ let currentHoverType = "";
 const supportsCursorTrailer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
 const animateTrailer = (e, interacting) => {
+  if (!trailer) return;
   // Offset by 12px so it acts like a "petal" to the bottom-right of the real cursor
   const x = e.clientX + 12;
   const y = e.clientY + 12;

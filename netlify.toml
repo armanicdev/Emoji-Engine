@@ -1,0 +1,19 @@
+# Netlify: build output matches scripts/build-dist.mjs (same as manual `dist/` upload).
+[build]
+  command = "node scripts/build-dist.mjs"
+  publish = "dist"
+
+[[headers]]
+  for = "/assets/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/src/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"

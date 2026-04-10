@@ -7,84 +7,35 @@
   <meta name="description"
     content="Convert flag artwork (SVG, PNG, JPG, WebP) into emoji-style PNGs for major platforms. Upload, preview, download.">
   <title>Flagoji</title>
+  <!-- Resource hints for external CDNs -->
+  <link rel="preconnect" href="https://esm.sh">
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="dns-prefetch" href="https://esm.sh">
+  <link rel="dns-prefetch" href="https://unpkg.com">
+  <!-- Preload critical fonts -->
   <link rel="preload" href="assets/fonts/ranade-300.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/archivo-600.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/styles.css">
-  <!-- Loader: first paint + spinner animation (inline overlay below is the reliable layer) -->
-  <style>
-    @keyframes app-loading-spin-inline {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    body.app--booting #app-main {
-      visibility: hidden;
-    }
-
-    html:has(body.app--booting) {
-      overflow: hidden;
-    }
-  </style>
+  <!-- Async load non-critical CSS -->
+  <link rel="preload" href="assets/styles.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript>
+    <link rel="stylesheet" href="assets/styles.css">
+  </noscript>
 </head>
 
 <body class="app--booting" aria-busy="true">
-  <!-- Full inline styles = always covers the viewport even if CSS is late or fails (common web pattern) -->
-  <div id="app-loading" class="app-loading" role="status" aria-busy="true" aria-live="polite"
-    style="position:fixed;top:0;left:0;right:0;bottom:0;width:100%;min-height:100vh;min-height:100dvh;height:100%;margin:0;padding:0;box-sizing:border-box;z-index:2147483647;background:#f4f1ea;display:flex;align-items:center;justify-content:center;flex-direction:row;opacity:1;pointer-events:auto;">
-    <span class="visually-hidden">Loading</span>
-    <div class="app-loading__spinner" aria-hidden="true"
-      style="box-sizing:border-box;width:44px;height:44px;border:3px solid rgba(20,20,20,0.15);border-top-color:#141414;border-radius:50%;animation:app-loading-spin-inline 0.75s linear infinite;flex-shrink:0;">
-    </div>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <div id="app-loading" class="app-loading app-loading--overlay" role="status" aria-busy="true" aria-live="polite">
+    <span class="visually-hidden">Loading application</span>
+    <div class="app-loading__spinner app-loading__spinner--overlay" aria-hidden="true"></div>
   </div>
-  <script>
-    (function () {
-      function getEl() {
-        return document.getElementById('app-loading');
-      }
-      window.__FLAGOJI_LOADER_UNLOCKED = false;
-      window.FlagojiHideLoader = function (opts) {
-        var force = opts && opts.force;
-        if (!force && !window.__FLAGOJI_LOADER_UNLOCKED) return;
-        var el = getEl();
-        if (!el || el.getAttribute('data-flagoji-loader') === 'done') return;
-        el.setAttribute('data-flagoji-loader', 'done');
-        var instant = opts && opts.instant;
-        document.documentElement.style.overflow = '';
-        if (instant) {
-          el.remove();
-          return;
-        }
-        var fadeMs = 700;
-        el.style.willChange = 'opacity';
-        el.style.transition = 'opacity ' + fadeMs + 'ms cubic-bezier(0.22, 1, 0.36, 1)';
-        el.style.pointerEvents = 'none';
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () {
-            el.style.opacity = '0';
-          });
-        });
-        setTimeout(function () {
-          el.style.willChange = '';
-          el.remove();
-        }, fadeMs + 120);
-      };
-      setTimeout(function () {
-        var el = getEl();
-        if (el && el.getAttribute('data-flagoji-loader') !== 'done' && typeof window.FlagojiHideLoader === 'function') {
-          window.__FLAGOJI_LOADER_UNLOCKED = true;
-          window.FlagojiHideLoader({ force: true, instant: false });
-        }
-      }, 15000);
-    })();
-  </script>
 
   <div id="app-main" class="app-main" inert aria-hidden="true">
     <div class="shell">
       <header class="masthead app-reveal app-reveal--1">
-        <h1>Flagoji</h1>
-        <button type="button" class="gif-toggle interactable" data-type="refresh" id="gifToggle"
-          onclick="toggleAnimation()" aria-pressed="false" aria-label="Toggle animated preview and GIF export">
+        <h1 id="site-title">Flagoji</h1>
+        <button type="button" class="gif-toggle interactable" data-type="refresh" id="gifToggle" aria-pressed="false"
+          aria-label="Toggle animated preview and GIF export">
           <svg class="gif-toggle__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
             stroke-linejoin="round" aria-hidden="true">
             <polyline points="23 4 23 10 17 10" />
@@ -94,34 +45,36 @@
         </button>
       </header>
 
-      <div class="main-stack app-reveal app-reveal--2">
-        <section class="col-input" aria-label="Upload flag">
-          <p class="section-label">Upload Flag</p>
-          <div class="upload-area interactable" data-type="upload" id="dropZone">
-            <p>Drop a file here, or click to choose — SVG, PNG, JPG, or WebP.</p>
-            <input type="file" id="fileInput"
-              accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
-              aria-label="Choose flag image file">
-            <div class="error-msg" id="errorMsg" role="alert"></div>
-          </div>
+      <main id="main-content" class="main-stack app-reveal app-reveal--2" aria-labelledby="site-title">
+        <section class="col-input" aria-labelledby="upload-heading">
+          <h2 id="upload-heading" class="section-label">Upload Flag</h2>
+          <label class="upload-area interactable" data-type="upload" id="dropZone" for="fileInput">
+            <span id="dropZone-desc">Drop a file here, or activate to choose — SVG, PNG, JPG, or WebP.</span>
+          </label>
+          <input type="file" id="fileInput"
+            accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
+            aria-describedby="dropZone-desc" aria-label="Choose flag image file" class="visually-hidden">
+          <div class="error-msg" id="errorMsg" role="alert" aria-live="assertive" hidden></div>
           <p class="footnote">Artwork is fitted to a 3:2 frame, then masked and lit per platform. Header or canvas
             downloads PNG; enable motion first for a transparent GIF export (no drop shadow).</p>
         </section>
 
-        <section class="block-output" aria-label="Previews">
-          <div class="output-controls" id="outputControls" style="display: none;">
-            <button type="button" class="scale-btn" data-scale="0.5">0.5x</button>
-            <button type="button" class="scale-btn active" data-scale="1">1x</button>
-            <button type="button" class="scale-btn" data-scale="2">2x</button>
-            <button type="button" class="scale-btn" data-scale="3">3x</button>
-            <div class="divider-vertical"></div>
-            <button type="button" class="aa-toggle active interactable" data-type="aa" id="aaToggle"
-              aria-pressed="true">Smoothing</button>
+        <section class="block-output" aria-labelledby="previews-heading">
+          <h2 id="previews-heading" class="visually-hidden">Platform previews</h2>
+          <div class="output-controls" id="outputControls" role="radiogroup" aria-label="Export resolution" hidden>
+            <button type="button" class="scale-btn" role="radio" aria-checked="false" data-scale="0.5">0.5x</button>
+            <button type="button" class="scale-btn active" role="radio" aria-checked="true" data-scale="1">1x</button>
+            <button type="button" class="scale-btn" role="radio" aria-checked="false" data-scale="2">2x</button>
+            <button type="button" class="scale-btn" role="radio" aria-checked="false" data-scale="3">3x</button>
+            <div class="divider-vertical" aria-hidden="true"></div>
+            <button type="button" class="aa-toggle active interactable" data-type="aa" id="aaToggle" aria-pressed="true"
+              aria-label="Toggle canvas smoothing">Smoothing</button>
           </div>
           <p class="empty-output" id="outputPlaceholder">Previews appear after you add artwork.</p>
-          <div class="previews" id="previewsContainer" style="display: none;">
-            <div class="preview-card" id="card-apple">
-              <div class="preview-header interactable" data-type="download" onclick="downloadPng('apple')">
+          <div class="previews" id="previewsContainer" hidden>
+            <article class="preview-card" id="card-apple">
+              <button type="button" class="preview-header interactable" data-type="download" data-variant="apple"
+                aria-label="Download Apple style as PNG or GIF">
                 <h3>Apple</h3>
                 <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -129,12 +82,14 @@
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-              </div>
-              <canvas class="preview-canvas interactable" data-type="download" id="preview-apple" width="256"
-                height="256" onclick="downloadPng('apple')"></canvas>
-            </div>
-            <div class="preview-card" id="card-twitter">
-              <div class="preview-header interactable" data-type="download" onclick="downloadPng('twitter')">
+              </button>
+              <canvas class="preview-canvas interactable" data-type="download" data-variant="apple" id="preview-apple"
+                width="256" height="256" role="img"
+                aria-label="Apple style preview. Activate to download PNG or GIF."></canvas>
+            </article>
+            <article class="preview-card" id="card-twitter">
+              <button type="button" class="preview-header interactable" data-type="download" data-variant="twitter"
+                aria-label="Download Twitter style as PNG or GIF">
                 <h3>Twitter</h3>
                 <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -142,12 +97,14 @@
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-              </div>
-              <canvas class="preview-canvas interactable" data-type="download" id="preview-twitter" width="256"
-                height="256" onclick="downloadPng('twitter')"></canvas>
-            </div>
-            <div class="preview-card" id="card-samsung">
-              <div class="preview-header interactable" data-type="download" onclick="downloadPng('samsung')">
+              </button>
+              <canvas class="preview-canvas interactable" data-type="download" data-variant="twitter"
+                id="preview-twitter" width="256" height="256" role="img"
+                aria-label="Twitter style preview. Activate to download PNG or GIF."></canvas>
+            </article>
+            <article class="preview-card" id="card-samsung">
+              <button type="button" class="preview-header interactable" data-type="download" data-variant="samsung"
+                aria-label="Download Samsung style as PNG or GIF">
                 <h3>Samsung</h3>
                 <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -155,12 +112,14 @@
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-              </div>
-              <canvas class="preview-canvas interactable" data-type="download" id="preview-samsung" width="256"
-                height="256" onclick="downloadPng('samsung')"></canvas>
-            </div>
-            <div class="preview-card" id="card-google">
-              <div class="preview-header interactable" data-type="download" onclick="downloadPng('google')">
+              </button>
+              <canvas class="preview-canvas interactable" data-type="download" data-variant="samsung"
+                id="preview-samsung" width="256" height="256" role="img"
+                aria-label="Samsung style preview. Activate to download PNG or GIF."></canvas>
+            </article>
+            <article class="preview-card" id="card-google">
+              <button type="button" class="preview-header interactable" data-type="download" data-variant="google"
+                aria-label="Download Google style as PNG or GIF">
                 <h3>Google</h3>
                 <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -168,12 +127,14 @@
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-              </div>
-              <canvas class="preview-canvas interactable" data-type="download" id="preview-google" width="256"
-                height="256" onclick="downloadPng('google')"></canvas>
-            </div>
-            <div class="preview-card" id="card-huawei">
-              <div class="preview-header interactable" data-type="download" onclick="downloadPng('huawei')">
+              </button>
+              <canvas class="preview-canvas interactable" data-type="download" data-variant="google" id="preview-google"
+                width="256" height="256" role="img"
+                aria-label="Google style preview. Activate to download PNG or GIF."></canvas>
+            </article>
+            <article class="preview-card" id="card-huawei">
+              <button type="button" class="preview-header interactable" data-type="download" data-variant="huawei"
+                aria-label="Download Huawei style as PNG or GIF">
                 <h3>Huawei</h3>
                 <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -181,12 +142,14 @@
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-              </div>
-              <canvas class="preview-canvas interactable" data-type="download" id="preview-huawei" width="256"
-                height="256" onclick="downloadPng('huawei')"></canvas>
-            </div>
-            <div class="preview-card" id="card-whatsapp">
-              <div class="preview-header interactable" data-type="download" onclick="downloadPng('whatsapp')">
+              </button>
+              <canvas class="preview-canvas interactable" data-type="download" data-variant="huawei" id="preview-huawei"
+                width="256" height="256" role="img"
+                aria-label="Huawei style preview. Activate to download PNG or GIF."></canvas>
+            </article>
+            <article class="preview-card" id="card-whatsapp">
+              <button type="button" class="preview-header interactable" data-type="download" data-variant="whatsapp"
+                aria-label="Download WhatsApp style as PNG or GIF">
                 <h3>WhatsApp</h3>
                 <svg class="preview-download__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -194,45 +157,47 @@
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-              </div>
-              <canvas class="preview-canvas interactable" data-type="download" id="preview-whatsapp" width="256"
-                height="256" onclick="downloadPng('whatsapp')"></canvas>
-            </div>
+              </button>
+              <canvas class="preview-canvas interactable" data-type="download" data-variant="whatsapp"
+                id="preview-whatsapp" width="256" height="256" role="img"
+                aria-label="WhatsApp style preview. Activate to download PNG or GIF."></canvas>
+            </article>
           </div>
         </section>
 
-        <section class="tuning-block" id="tuningPanel" style="display: none;" aria-label="Per-platform settings">
+        <section class="tuning-block" id="tuningPanel" hidden aria-label="Per-platform settings">
           <div class="param-groups" id="sliders"></div>
         </section>
-      </div>
+      </main>
     </div>
   </div>
 
-  <!-- Outside #app-main so mix-blend-mode on the image composites with body + noise (not isolated inside app-main) -->
-  <div class="flowers-bottom">
-    <img class="flowers-bottom__img" src="assets/images/flowers-2400.webp"
-      srcset="assets/images/flowers-1200.webp 1200w, assets/images/flowers-2400.webp 2400w, assets/images/flowers.webp 4096w"
-      sizes="(max-width: 640px) 200vw, 100vw" alt="" width="4096" height="727" decoding="async" fetchpriority="low"
+  <footer class="flowers-bottom" aria-label="Site footer">
+    <img class="flowers-bottom__img" src="assets/images/flowers-1200.webp"
+      srcset="assets/images/flowers-1200.webp 1200w, assets/images/flowers-2400.webp 2400w"
+      sizes="(max-width: 640px) 200vw, 100vw" alt="" width="1200" height="213" decoding="async" fetchpriority="low"
       loading="lazy" aria-hidden="true">
     <div class="flowers-bottom__overlay" aria-hidden="true"></div>
     <div class="flowers-bottom__brand">
       <p class="flowers-bottom__credit">
         <span class="flowers-bottom__credit-part">Made with love by</span>
-        <img class="flowers-bottom__credit-logo" src="assets/images/logo.svg" alt="" width="20" height="18"
-          decoding="async">
+        <img class="flowers-bottom__credit-logo" src="assets/images/logo.svg" alt="Armanic logo" width="20" height="18"
+          loading="lazy" decoding="async">
         <span class="flowers-bottom__credit-part">Armanic</span>
       </p>
     </div>
-  </div>
+  </footer>
 
-  <div id="trailer">
+  <div id="trailer" aria-hidden="true">
     <div id="trailer-icon"></div>
   </div>
 
-
-  <script src="assets/vendor/lenis.min.js" defer></script>
-  <!-- Module defers; loader hide is triggered from here via global (see script after #app-loading) -->
-  <script src="src/main.js" type="module"></script>
+  <!-- Critical loader -->
+  <script src="src/flagoji-loader-boot.js" defer></script>
+  <!-- Non-critical smooth scrolling - load async -->
+  <script src="assets/vendor/lenis.min.js" async></script>
+  <!-- Main app module -->
+  <script src="src/main.js" type="module" defer></script>
 </body>
 
 </html>
